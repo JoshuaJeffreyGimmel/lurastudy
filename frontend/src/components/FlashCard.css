@@ -1,0 +1,143 @@
+.flashcard-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+/* ─── Progress bar ──────────────────────────────────────────────────────────── */
+.flashcard-progress {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--color-surface-2);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: var(--color-primary);
+  border-radius: 999px;
+  transition: width 0.4s ease;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* ─── Flip card ─────────────────────────────────────────────────────────────── */
+.flashcard {
+  width: 100%;
+  height: 280px;
+  perspective: 1200px;
+  cursor: pointer;
+  outline: none;
+}
+
+.flashcard:focus-visible {
+  box-shadow: 0 0 0 3px var(--color-primary);
+  border-radius: var(--radius-lg);
+}
+
+.flashcard-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+  transition: transform 0.55s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.flashcard.flipped .flashcard-inner {
+  transform: rotateY(180deg);
+}
+
+.flashcard-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  border-radius: var(--radius-lg);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow);
+}
+
+.flashcard-front {
+  background: var(--color-surface);
+}
+
+.flashcard-back {
+  background: var(--color-surface-2);
+  transform: rotateY(180deg);
+}
+
+.face-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-primary);
+}
+
+.face-text {
+  font-size: 1.15rem;
+  line-height: 1.6;
+  text-align: center;
+  color: var(--color-text);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.flip-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  position: absolute;
+  bottom: 1rem;
+}
+
+/* ─── Action buttons ────────────────────────────────────────────────────────── */
+.flashcard-actions {
+  display: flex;
+  gap: 1rem;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.flashcard-actions.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.flashcard-actions button {
+  min-width: 140px;
+  padding: 0.65rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+/* ─── Flip CTA ──────────────────────────────────────────────────────────────── */
+.flip-cta {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  text-align: center;
+}
