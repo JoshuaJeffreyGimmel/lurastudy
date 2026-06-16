@@ -14,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.document import Chunk, Document
-from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.schemas.document import (
+    ChunkResponse,
+    DocumentChunksResponse,
+    DocumentListResponse,
+    DocumentResponse,
+)
 from app.services.config_store import (
     EMBEDDING_API_KEY,
     EMBEDDING_BASE_URL,
@@ -28,12 +33,26 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-ALLOWED_EXTENSIONS = {"pdf", "txt", "md"}
+ALLOWED_EXTENSIONS = {
+    "pdf", "txt", "md",
+    "docx", "pptx", "xlsx",
+    "html", "htm",
+    "csv", "xml",
+    "ipynb",
+}
 ALLOWED_CONTENT_TYPES = {
     "application/pdf",
     "text/plain",
     "text/markdown",
     "text/x-markdown",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "text/html",
+    "text/csv",
+    "text/xml",
+    "application/xml",
+    "application/json",
 }
 
 
@@ -168,6 +187,34 @@ async def get_document(
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     return document
+
+
+@router.get("/{document_id}/chunks", response_model=DocumentChunksResponse)
+async def get_document_chunks(
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all extracted text chunks for a document."""
+    stmt = select(Document).where(Document.id == document_id)
+    result = await db.execute(stmt)
+    document = result.scalar_one_or_none()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    chunks_stmt = (
+        select(Chunk)
+        .where(Chunk.document_id == document_id)
+        .order_by(Chunk.chunk_index)
+    )
+    chunks_result = await db.execute(chunks_stmt)
+    chunks = chunks_result.scalars().all()
+
+    return DocumentChunksResponse(
+        document_id=document.id,
+        original_filename=document.original_filename,
+        total_chunks=len(chunks),
+        chunks=[ChunkResponse(id=c.id, chunk_index=c.chunk_index, content=c.content) for c in chunks],
+    )
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -1,40 +1,31 @@
 """
 Text extraction and chunking service.
-Supports .txt, .md, and .pdf files.
+Uses markitdown to support a wide range of file formats:
+PDF, DOCX, PPTX, XLSX, HTML, TXT, MD, and more.
 """
 import io
 import re
-from pathlib import Path
 
-import aiofiles
-from pypdf import PdfReader
+from markitdown import MarkItDown
+
+# Shared MarkItDown instance (stateless, safe to reuse)
+_md = MarkItDown()
 
 # Chunking parameters
 MIN_CHUNK_CHARS = 20
 MAX_CHUNK_CHARS = 1500
 
 
-def extract_text_from_pdf(file_bytes: bytes) -> str:
-    """Extract all text from a PDF file given its raw bytes."""
-    reader = PdfReader(io.BytesIO(file_bytes))
-    pages_text = []
-    for page in reader.pages:
-        text = page.extract_text()
-        if text:
-            pages_text.append(text.strip())
-    return "\n\n".join(pages_text)
-
-
-def extract_text_from_plaintext(file_bytes: bytes) -> str:
-    """Decode plain text / markdown files."""
-    return file_bytes.decode("utf-8", errors="replace")
-
-
 def extract_text(file_bytes: bytes, file_type: str) -> str:
-    """Dispatch to the correct extractor based on file type."""
-    if file_type == "pdf":
-        return extract_text_from_pdf(file_bytes)
-    return extract_text_from_plaintext(file_bytes)
+    """
+    Extract plain text from a file using markitdown.
+    Supports PDF, DOCX, PPTX, XLSX, HTML, TXT, MD, and more.
+    Returns the extracted content as a Markdown-formatted string.
+    """
+    # markitdown needs a file-like object; pass the extension as a hint
+    stream = io.BytesIO(file_bytes)
+    result = _md.convert_stream(stream, file_extension=f".{file_type}")
+    return result.text_content or ""
 
 
 def chunk_text(text: str) -> list[str]:
@@ -92,5 +83,6 @@ def chunk_text(text: str) -> list[str]:
 
 async def read_upload_file(file_path: str) -> bytes:
     """Read an uploaded file from disk asynchronously."""
+    import aiofiles
     async with aiofiles.open(file_path, "rb") as f:
         return await f.read()

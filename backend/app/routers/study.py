@@ -98,6 +98,7 @@ async def list_decks(
             updated_at=deck.updated_at,
             source_count=len(deck.source_documents),
             card_count=len(deck.flashcards),
+            source_documents=deck.source_documents,
         )
         for deck in decks
     ]

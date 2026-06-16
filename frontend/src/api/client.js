@@ -53,6 +53,10 @@ export async function deleteDocument(id) {
   return request("DELETE", `/documents/${id}`);
 }
 
+export async function getDocumentChunks(id) {
+  return request("GET", `/documents/${id}/chunks`);
+}
+
 // ─── Decks ────────────────────────────────────────────────────────────────────
 
 export async function createDeck({ title, description }) {

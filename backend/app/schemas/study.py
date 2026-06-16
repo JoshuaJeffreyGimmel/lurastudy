@@ -53,6 +53,7 @@ class DeckSummaryResponse(BaseModel):
     updated_at: datetime
     source_count: int
     card_count: int
+    source_documents: list[DocumentResponse] = []
 
     model_config = {"from_attributes": True}
 

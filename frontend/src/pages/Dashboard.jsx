@@ -5,16 +5,13 @@ import {
   deleteDocument,
   listDecks,
   listDocuments,
-  uploadDocument,
 } from "../api/client.js";
-import UploadZone from "../components/UploadZone.jsx";
 import "./Dashboard.css";
 
 export default function Dashboard() {
   const [documents, setDocuments] = useState([]);
   const [decks, setDecks] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState(null);
   const [showNewDeck, setShowNewDeck] = useState(false);
   const navigate = useNavigate();
@@ -31,19 +28,6 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData().finally(() => setLoading(false));
   }, [fetchData]);
-
-  async function handleUpload(file) {
-    setUploading(true);
-    setError(null);
-    try {
-      const doc = await uploadDocument(file);
-      setDocuments((prev) => [doc, ...prev].slice(0, 5));
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setUploading(false);
-    }
-  }
 
   async function handleDeleteDoc(doc) {
     if (!window.confirm(`Delete "${doc.original_filename}"?`)) return;
@@ -87,13 +71,6 @@ export default function Dashboard() {
           onCreated={(deck) => navigate(`/decks/${deck.id}`)}
         />
       )}
-
-      {/* ─── Quick Upload ──────────────────────────────────────────────────── */}
-      <section className="upload-section card">
-        <h2>Quick Upload</h2>
-        <p className="section-subtitle">Upload a document to your library, then add it to a deck.</p>
-        <UploadZone onUpload={handleUpload} uploading={uploading} />
-      </section>
 
       {/* ─── Recent Decks ─────────────────────────────────────────────────── */}
       <section className="dashboard-section">

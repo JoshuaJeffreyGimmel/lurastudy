@@ -8,8 +8,8 @@ asyncpg==0.29.0
 alembic==1.13.1
 pgvector==0.3.2
 
-# PDF / text extraction
-pypdf==4.2.0
+# Document text extraction (PDF, DOCX, PPTX, XLSX, HTML, MD, TXT, and more)
+markitdown[all]==0.1.2
 
 # LLM
 openai==1.30.1
