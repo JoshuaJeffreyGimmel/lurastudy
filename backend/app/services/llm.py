@@ -1,6 +1,6 @@
 """
 LLM connector service using the OpenAI-compatible API.
-Handles structured JSON output for flashcard generation.
+Handles structured JSON output for flashcard generation and chat.
 
 Configuration is read from the database (config_store) on every call,
 so changes made via the Settings UI take effect immediately without restart.
@@ -32,6 +32,11 @@ You MUST respond with ONLY valid JSON in this exact format, with no additional t
 }}
 
 Generate between 5 and {max_cards} flashcards. Prioritize quality over quantity."""
+
+CHAT_SYSTEM_PROMPT = """You are a helpful study assistant. You have been given excerpts from study materials.
+Answer the user's questions based on the provided context. Be concise, accurate, and helpful.
+If the answer is not in the provided context, say so honestly.
+Format your responses clearly — use bullet points or numbered lists when appropriate."""
 
 
 def get_llm_client(base_url: str | None = None, api_key: str | None = None) -> AsyncOpenAI:
@@ -131,6 +136,81 @@ async def generate_flashcards(
     # Parse and validate the JSON response
     parsed = _parse_flashcard_response(raw_content)
     return parsed
+
+
+async def chat_with_sources(
+    context_chunks: list[str],
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    llm_base_url: str | None = None,
+    llm_api_key: str | None = None,
+    llm_model: str | None = None,
+) -> str:
+    """
+    Chat with the LLM using retrieved context chunks as grounding.
+
+    Args:
+        context_chunks: Relevant text chunks retrieved via RAG
+        message: The user's current message
+        history: Previous conversation turns [{"role": "user"|"assistant", "content": "..."}]
+        llm_base_url: Optional LLM base URL override
+        llm_api_key: Optional LLM API key override
+        llm_model: Optional model name override
+
+    Returns:
+        The assistant's reply as a string.
+    """
+    if llm_base_url or llm_api_key:
+        client = AsyncOpenAI(
+            base_url=llm_base_url or env_settings.llm_base_url,
+            api_key=llm_api_key or env_settings.llm_api_key,
+        )
+    else:
+        client = get_llm_client()
+
+    model = llm_model or env_settings.llm_model
+
+    # Build context string
+    context = "\n\n---\n\n".join(context_chunks)
+    max_context_chars = 10000
+    if len(context) > max_context_chars:
+        context = context[:max_context_chars] + "\n\n[... content truncated ...]"
+
+    # Build messages list
+    messages = [
+        {"role": "system", "content": CHAT_SYSTEM_PROMPT},
+        {
+            "role": "user",
+            "content": f"Here are the study materials to reference:\n\n{context}\n\n---\n\nPlease answer questions based on the above materials.",
+        },
+        {
+            "role": "assistant",
+            "content": "I've reviewed the study materials. I'm ready to help you understand them. What would you like to know?",
+        },
+    ]
+
+    # Add conversation history
+    if history:
+        for turn in history:
+            messages.append({"role": turn["role"], "content": turn["content"]})
+
+    # Add the current user message
+    messages.append({"role": "user", "content": message})
+
+    logger.info("Requesting chat response from LLM (model=%s, context_chunks=%d)", model, len(context_chunks))
+
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=0.6,
+        )
+    except Exception as e:
+        logger.error("LLM chat call failed: %s", e)
+        raise
+
+    reply = response.choices[0].message.content or ""
+    return reply.strip()
 
 
 def _parse_flashcard_response(raw: str) -> list[dict[str, str]]:

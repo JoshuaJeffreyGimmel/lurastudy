@@ -1,6 +1,6 @@
 """
 Study router.
-Handles flashcard deck generation, retrieval, and card state updates.
+Handles deck CRUD, flashcard generation, card state updates, and deck chat.
 """
 import logging
 import uuid
@@ -12,12 +12,15 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.document import Document
-from app.models.knowledge_base import KnowledgeBase
 from app.models.study import Deck, Flashcard
 from app.schemas.study import (
+    ChatRequest,
+    ChatResponse,
+    DeckCreate,
     DeckListResponse,
     DeckResponse,
     DeckSummaryResponse,
+    DeckUpdate,
     FlashcardResponse,
     FlashcardStateUpdate,
     GenerateFlashcardsRequest,
@@ -28,11 +31,9 @@ from app.services.config_store import (
     LLM_MODEL,
     get_all_settings,
 )
-from app.services.llm import generate_flashcards
+from app.services.llm import chat_with_sources, generate_flashcards
 from app.services.rag import (
-    get_all_chunks_text,
     get_all_chunks_text_multi,
-    retrieve_relevant_chunks,
     retrieve_relevant_chunks_multi,
 )
 
@@ -41,114 +42,204 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/study", tags=["study"])
 
 
-@router.post("/generate/flashcards", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
-async def generate_flashcard_deck(
+# ─── Helper ───────────────────────────────────────────────────────────────────
+
+async def _load_deck(deck_id: uuid.UUID, db: AsyncSession) -> Deck:
+    """Load a deck with its source_documents and flashcards, or raise 404."""
+    stmt = (
+        select(Deck)
+        .where(Deck.id == deck_id)
+        .options(
+            selectinload(Deck.source_documents),
+            selectinload(Deck.flashcards),
+        )
+    )
+    result = await db.execute(stmt)
+    deck = result.scalar_one_or_none()
+    if not deck:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    return deck
+
+
+# ─── Deck CRUD ────────────────────────────────────────────────────────────────
+
+@router.post("/decks", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
+async def create_deck(
+    payload: DeckCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new empty deck workspace."""
+    deck = Deck(title=payload.title, description=payload.description)
+    db.add(deck)
+    await db.flush()
+    await db.refresh(deck)
+    return await _load_deck(deck.id, db)
+
+
+@router.get("/decks", response_model=DeckListResponse)
+async def list_decks(
+    db: AsyncSession = Depends(get_db),
+):
+    """Return all decks with summary info."""
+    stmt = (
+        select(Deck)
+        .options(selectinload(Deck.source_documents), selectinload(Deck.flashcards))
+        .order_by(Deck.updated_at.desc())
+    )
+    result = await db.execute(stmt)
+    decks = result.scalars().all()
+
+    summaries = [
+        DeckSummaryResponse(
+            id=deck.id,
+            title=deck.title,
+            description=deck.description,
+            created_at=deck.created_at,
+            updated_at=deck.updated_at,
+            source_count=len(deck.source_documents),
+            card_count=len(deck.flashcards),
+        )
+        for deck in decks
+    ]
+
+    return DeckListResponse(decks=summaries, total=len(summaries))
+
+
+@router.get("/decks/{deck_id}", response_model=DeckResponse)
+async def get_deck(
+    deck_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Return a deck with its source documents and flashcards."""
+    deck = await _load_deck(deck_id, db)
+    deck.flashcards.sort(key=lambda c: c.card_index)
+    return deck
+
+
+@router.patch("/decks/{deck_id}", response_model=DeckResponse)
+async def update_deck(
+    deck_id: uuid.UUID,
+    payload: DeckUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a deck's title or description."""
+    deck = await _load_deck(deck_id, db)
+    if payload.title is not None:
+        deck.title = payload.title
+    if payload.description is not None:
+        deck.description = payload.description
+    await db.flush()
+    return await _load_deck(deck_id, db)
+
+
+@router.delete("/decks/{deck_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_deck(
+    deck_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a deck and all its flashcards."""
+    stmt = select(Deck).where(Deck.id == deck_id)
+    result = await db.execute(stmt)
+    deck = result.scalar_one_or_none()
+    if not deck:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
+    await db.delete(deck)
+
+
+# ─── Deck Source Documents ────────────────────────────────────────────────────
+
+@router.post("/decks/{deck_id}/documents/{document_id}", response_model=DeckResponse)
+async def add_document_to_deck(
+    deck_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Add a source document to a deck."""
+    deck = await _load_deck(deck_id, db)
+
+    doc_stmt = select(Document).where(Document.id == document_id)
+    doc_result = await db.execute(doc_stmt)
+    doc = doc_result.scalar_one_or_none()
+    if not doc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+
+    if doc not in deck.source_documents:
+        deck.source_documents.append(doc)
+        await db.flush()
+
+    return await _load_deck(deck_id, db)
+
+
+@router.delete("/decks/{deck_id}/documents/{document_id}", response_model=DeckResponse)
+async def remove_document_from_deck(
+    deck_id: uuid.UUID,
+    document_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Remove a source document from a deck."""
+    deck = await _load_deck(deck_id, db)
+    deck.source_documents = [d for d in deck.source_documents if d.id != document_id]
+    await db.flush()
+    return await _load_deck(deck_id, db)
+
+
+# ─── Flashcard Generation ─────────────────────────────────────────────────────
+
+@router.post("/decks/{deck_id}/generate", response_model=DeckResponse)
+async def generate_deck_flashcards(
+    deck_id: uuid.UUID,
     request: GenerateFlashcardsRequest,
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Generate a flashcard deck for a document or knowledge base using RAG + LLM.
-    Saves the deck and cards to the database.
-    Uses the LLM model configured in Settings (DB-backed, falls back to .env).
+    Generate flashcards from all source documents in the deck.
+    Replaces any existing flashcards in the deck.
     """
-    # Load current LLM config from DB (falls back to .env defaults)
+    deck = await _load_deck(deck_id, db)
+
+    if not deck.source_documents:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This deck has no source documents. Add at least one document before generating flashcards.",
+        )
+
+    ready_docs = [d for d in deck.source_documents if d.status == "ready"]
+    if not ready_docs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No ready documents found in this deck. Please wait for document processing to complete.",
+        )
+
+    # Load LLM config
     cfg = await get_all_settings(db)
     llm_base_url = cfg[LLM_BASE_URL]
     llm_api_key = cfg[LLM_API_KEY]
     llm_model = cfg[LLM_MODEL]
 
-    # ── Single-document path ──────────────────────────────────────────────────
-    if request.document_id is not None:
-        stmt = select(Document).where(Document.id == request.document_id)
-        result = await db.execute(stmt)
-        document = result.scalar_one_or_none()
+    doc_ids = [d.id for d in ready_docs]
 
-        if not document:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    logger.info(
+        "Generating flashcards for deck '%s' (model=%s, %d docs)",
+        deck_id, llm_model, len(ready_docs),
+    )
 
-        if document.status != "ready":
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"Document is not ready for generation (status: {document.status}). "
-                       "Please wait for processing to complete.",
-            )
+    try:
+        context_chunks = await retrieve_relevant_chunks_multi(
+            db=db,
+            document_ids=doc_ids,
+            query="key concepts, definitions, important facts, and main ideas",
+            top_k=min(15, request.max_cards),
+        )
+    except Exception as e:
+        logger.warning("RAG retrieval failed (%s), falling back to all chunks.", e)
+        context_chunks = await get_all_chunks_text_multi(db=db, document_ids=doc_ids)
 
-        logger.info(
-            "Using LLM model '%s' at '%s' for document '%s'",
-            llm_model, llm_base_url, document.original_filename,
+    if not context_chunks:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No text content found in the deck's source documents.",
         )
 
-        try:
-            context_chunks = await retrieve_relevant_chunks(
-                db=db,
-                document_id=request.document_id,
-                query="key concepts, definitions, important facts, and main ideas",
-                top_k=min(15, request.max_cards),
-            )
-        except Exception as e:
-            logger.warning("RAG retrieval failed (%s), falling back to all chunks.", e)
-            context_chunks = await get_all_chunks_text(db=db, document_id=request.document_id)
-
-        if not context_chunks:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No text content found for this document.",
-            )
-
-        deck_title = f"Flashcards: {document.original_filename}"
-        deck_document_id = request.document_id
-        deck_kb_id = None
-
-    # ── Knowledge-base path ───────────────────────────────────────────────────
-    else:
-        stmt = (
-            select(KnowledgeBase)
-            .where(KnowledgeBase.id == request.knowledge_base_id)
-            .options(selectinload(KnowledgeBase.documents))
-        )
-        result = await db.execute(stmt)
-        kb = result.scalar_one_or_none()
-
-        if not kb:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found")
-
-        ready_docs = [d for d in kb.documents if d.status == "ready"]
-        if not ready_docs:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No ready documents found in this knowledge base.",
-            )
-
-        doc_ids = [d.id for d in ready_docs]
-
-        logger.info(
-            "Using LLM model '%s' at '%s' for knowledge base '%s' (%d docs)",
-            llm_model, llm_base_url, kb.name, len(ready_docs),
-        )
-
-        try:
-            context_chunks = await retrieve_relevant_chunks_multi(
-                db=db,
-                document_ids=doc_ids,
-                query="key concepts, definitions, important facts, and main ideas",
-                top_k=min(15, request.max_cards),
-            )
-        except Exception as e:
-            logger.warning("RAG retrieval failed (%s), falling back to all chunks.", e)
-            context_chunks = await get_all_chunks_text_multi(db=db, document_ids=doc_ids)
-
-        if not context_chunks:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="No text content found in this knowledge base.",
-            )
-
-        deck_title = f"Flashcards: {kb.name}"
-        deck_document_id = None
-        deck_kb_id = request.knowledge_base_id
-
-    # ── Generate flashcards via LLM ───────────────────────────────────────────
-    logger.info("Generating flashcards (model=%s)...", llm_model)
     try:
         card_data = await generate_flashcards(
             context_chunks=context_chunks,
@@ -170,16 +261,11 @@ async def generate_flashcard_deck(
                    "Please check your LLM configuration in Settings.",
         )
 
-    # ── Persist deck + cards ──────────────────────────────────────────────────
-    deck = Deck(
-        document_id=deck_document_id,
-        knowledge_base_id=deck_kb_id,
-        title=deck_title,
-    )
-    db.add(deck)
+    # Delete existing flashcards and replace with new ones
+    for existing_card in deck.flashcards:
+        await db.delete(existing_card)
     await db.flush()
 
-    flashcards = []
     for idx, card in enumerate(card_data):
         flashcard = Flashcard(
             deck_id=deck.id,
@@ -189,69 +275,88 @@ async def generate_flashcard_deck(
             got_it=None,
         )
         db.add(flashcard)
-        flashcards.append(flashcard)
 
     await db.flush()
+    logger.info("Generated %d flashcards for deck '%s'.", len(card_data), deck_id)
 
-    logger.info("Created deck '%s' with %d cards.", deck.id, len(flashcards))
-
-    stmt = (
-        select(Deck)
-        .where(Deck.id == deck.id)
-        .options(selectinload(Deck.flashcards))
-    )
-    result = await db.execute(stmt)
-    return result.scalar_one()
+    return await _load_deck(deck_id, db)
 
 
-@router.get("/decks", response_model=DeckListResponse)
-async def list_decks(
+# ─── Deck Chat ────────────────────────────────────────────────────────────────
+
+@router.post("/decks/{deck_id}/chat", response_model=ChatResponse)
+async def chat_with_deck(
+    deck_id: uuid.UUID,
+    request: ChatRequest,
     db: AsyncSession = Depends(get_db),
 ):
-    """Return all flashcard decks with summary info."""
-    stmt = select(Deck).order_by(Deck.created_at.desc())
-    result = await db.execute(stmt)
-    decks = result.scalars().all()
+    """
+    Chat with the AI about the deck's source documents using RAG.
+    """
+    deck = await _load_deck(deck_id, db)
 
-    summaries = []
-    for deck in decks:
-        count_stmt = select(Flashcard).where(Flashcard.deck_id == deck.id)
-        count_result = await db.execute(count_stmt)
-        card_count = len(count_result.scalars().all())
-        summaries.append(
-            DeckSummaryResponse(
-                id=deck.id,
-                document_id=deck.document_id,
-                knowledge_base_id=deck.knowledge_base_id,
-                title=deck.title,
-                created_at=deck.created_at,
-                card_count=card_count,
-            )
+    if not deck.source_documents:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This deck has no source documents to chat about. Add documents first.",
         )
 
-    return DeckListResponse(decks=summaries, total=len(summaries))
+    ready_docs = [d for d in deck.source_documents if d.status == "ready"]
+    if not ready_docs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No ready documents found in this deck.",
+        )
+
+    # Load LLM config
+    cfg = await get_all_settings(db)
+    llm_base_url = cfg[LLM_BASE_URL]
+    llm_api_key = cfg[LLM_API_KEY]
+    llm_model = cfg[LLM_MODEL]
+
+    doc_ids = [d.id for d in ready_docs]
+
+    # Retrieve relevant chunks for the user's message
+    try:
+        context_chunks = await retrieve_relevant_chunks_multi(
+            db=db,
+            document_ids=doc_ids,
+            query=request.message,
+            top_k=8,
+        )
+    except Exception as e:
+        logger.warning("RAG retrieval failed for chat (%s), falling back to all chunks.", e)
+        context_chunks = await get_all_chunks_text_multi(db=db, document_ids=doc_ids)
+
+    if not context_chunks:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No text content found in the deck's source documents.",
+        )
+
+    # Convert history to the format expected by the LLM service
+    history = [{"role": msg.role, "content": msg.content} for msg in request.history]
+
+    try:
+        reply = await chat_with_sources(
+            context_chunks=context_chunks,
+            message=request.message,
+            history=history,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
+            llm_model=llm_model,
+        )
+    except Exception as e:
+        logger.error("Chat LLM call failed: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to get a response from the LLM. Please check your settings.",
+        )
+
+    return ChatResponse(reply=reply)
 
 
-@router.get("/decks/{deck_id}", response_model=DeckResponse)
-async def get_deck(
-    deck_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    """Return a deck with all its flashcards."""
-    stmt = (
-        select(Deck)
-        .where(Deck.id == deck_id)
-        .options(selectinload(Deck.flashcards))
-    )
-    result = await db.execute(stmt)
-    deck = result.scalar_one_or_none()
-
-    if not deck:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
-
-    deck.flashcards.sort(key=lambda c: c.card_index)
-    return deck
-
+# ─── Flashcard State ──────────────────────────────────────────────────────────
 
 @router.patch("/flashcards/{flashcard_id}", response_model=FlashcardResponse)
 async def update_flashcard_state(
@@ -271,19 +376,3 @@ async def update_flashcard_state(
     await db.flush()
     await db.refresh(flashcard)
     return flashcard
-
-
-@router.delete("/decks/{deck_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_deck(
-    deck_id: uuid.UUID,
-    db: AsyncSession = Depends(get_db),
-):
-    """Delete a flashcard deck and all its cards."""
-    stmt = select(Deck).where(Deck.id == deck_id)
-    result = await db.execute(stmt)
-    deck = result.scalar_one_or_none()
-
-    if not deck:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
-
-    await db.delete(deck)

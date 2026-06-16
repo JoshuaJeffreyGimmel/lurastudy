@@ -33,8 +33,11 @@ class Document(Base):
     chunks: Mapped[list["Chunk"]] = relationship(
         "Chunk", back_populates="document", cascade="all, delete-orphan"
     )
+    # Decks that use this document as a source (many-to-many)
     decks: Mapped[list["Deck"]] = relationship(  # noqa: F821
-        "Deck", back_populates="document", cascade="all, delete-orphan"
+        "Deck",
+        secondary="deck_documents",
+        back_populates="source_documents",
     )
     knowledge_bases: Mapped[list["KnowledgeBase"]] = relationship(  # noqa: F821
         "KnowledgeBase",

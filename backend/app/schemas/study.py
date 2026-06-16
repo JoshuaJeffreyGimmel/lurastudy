@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
+from app.schemas.document import DocumentResponse
+
 
 class FlashcardResponse(BaseModel):
     id: uuid.UUID
@@ -19,23 +21,37 @@ class FlashcardStateUpdate(BaseModel):
     got_it: bool
 
 
+# ─── Deck schemas ──────────────────────────────────────────────────────────────
+
+class DeckCreate(BaseModel):
+    title: str
+    description: str | None = None
+
+
+class DeckUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+
+
 class DeckResponse(BaseModel):
     id: uuid.UUID
-    document_id: uuid.UUID | None
-    knowledge_base_id: uuid.UUID | None
     title: str
+    description: str | None
     created_at: datetime
-    flashcards: list[FlashcardResponse]
+    updated_at: datetime
+    source_documents: list[DocumentResponse] = []
+    flashcards: list[FlashcardResponse] = []
 
     model_config = {"from_attributes": True}
 
 
 class DeckSummaryResponse(BaseModel):
     id: uuid.UUID
-    document_id: uuid.UUID | None
-    knowledge_base_id: uuid.UUID | None
     title: str
+    description: str | None
     created_at: datetime
+    updated_at: datetime
+    source_count: int
     card_count: int
 
     model_config = {"from_attributes": True}
@@ -46,13 +62,24 @@ class DeckListResponse(BaseModel):
     total: int
 
 
+# ─── Flashcard generation ──────────────────────────────────────────────────────
+
 class GenerateFlashcardsRequest(BaseModel):
-    document_id: uuid.UUID | None = None
-    knowledge_base_id: uuid.UUID | None = None
+    """Generate flashcards from the deck's own source documents."""
     max_cards: int = 20
 
-    def model_post_init(self, __context) -> None:
-        if self.document_id is None and self.knowledge_base_id is None:
-            raise ValueError("Either document_id or knowledge_base_id must be provided.")
-        if self.document_id is not None and self.knowledge_base_id is not None:
-            raise ValueError("Provide either document_id or knowledge_base_id, not both.")
+
+# ─── Chat ──────────────────────────────────────────────────────────────────────
+
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    message: str
+    history: list[ChatMessage] = []
+
+
+class ChatResponse(BaseModel):
+    reply: str

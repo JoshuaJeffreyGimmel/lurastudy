@@ -44,6 +44,3 @@ class KnowledgeBase(Base):
         back_populates="knowledge_bases",
         lazy="selectin",
     )
-    decks: Mapped[list["Deck"]] = relationship(  # noqa: F821
-        "Deck", back_populates="knowledge_base", cascade="all, delete-orphan"
-    )

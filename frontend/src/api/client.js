@@ -53,13 +53,10 @@ export async function deleteDocument(id) {
   return request("DELETE", `/documents/${id}`);
 }
 
-// ─── Study / Flashcards ───────────────────────────────────────────────────────
+// ─── Decks ────────────────────────────────────────────────────────────────────
 
-export async function generateFlashcards({ documentId, knowledgeBaseId, maxCards = 20 }) {
-  const body = { max_cards: maxCards };
-  if (documentId) body.document_id = documentId;
-  if (knowledgeBaseId) body.knowledge_base_id = knowledgeBaseId;
-  return request("POST", "/study/generate/flashcards", body);
+export async function createDeck({ title, description }) {
+  return request("POST", "/study/decks", { title, description });
 }
 
 export async function listDecks() {
@@ -70,9 +67,43 @@ export async function getDeck(deckId) {
   return request("GET", `/study/decks/${deckId}`);
 }
 
+export async function updateDeck(deckId, { title, description }) {
+  const body = {};
+  if (title !== undefined) body.title = title;
+  if (description !== undefined) body.description = description;
+  return request("PATCH", `/study/decks/${deckId}`, body);
+}
+
 export async function deleteDeck(deckId) {
   return request("DELETE", `/study/decks/${deckId}`);
 }
+
+// ─── Deck Source Documents ────────────────────────────────────────────────────
+
+export async function addDocumentToDeck(deckId, documentId) {
+  return request("POST", `/study/decks/${deckId}/documents/${documentId}`);
+}
+
+export async function removeDocumentFromDeck(deckId, documentId) {
+  return request("DELETE", `/study/decks/${deckId}/documents/${documentId}`);
+}
+
+// ─── Flashcard Generation ─────────────────────────────────────────────────────
+
+export async function generateDeckFlashcards(deckId, maxCards = 20) {
+  return request("POST", `/study/decks/${deckId}/generate`, { max_cards: maxCards });
+}
+
+// ─── Deck Chat ────────────────────────────────────────────────────────────────
+
+export async function chatWithDeck(deckId, message, history = []) {
+  return request("POST", `/study/decks/${deckId}/chat`, {
+    message,
+    history,
+  });
+}
+
+// ─── Flashcard State ──────────────────────────────────────────────────────────
 
 export async function updateFlashcardState(flashcardId, gotIt) {
   return request("PATCH", `/study/flashcards/${flashcardId}`, {

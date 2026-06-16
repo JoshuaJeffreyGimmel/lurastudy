@@ -7,6 +7,7 @@ import "./StudyPage.css";
 export default function StudyPage() {
   const { deckId } = useParams();
   const navigate = useNavigate();
+  const backPath = `/decks/${deckId}`;
 
   const [deck, setDeck] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -84,8 +85,8 @@ export default function StudyPage() {
   return (
     <div className="study-page">
       <div className="study-header">
-        <button className="btn-secondary back-btn" onClick={() => navigate("/decks")}>
-          ← Back to Decks
+        <button className="btn-secondary back-btn" onClick={() => navigate(backPath)}>
+          ← Back to Deck
         </button>
         <div className="study-title">
           <h1>{deck.title}</h1>
@@ -102,7 +103,7 @@ export default function StudyPage() {
           totalCount={totalCards}
           onRestartReview={restartReview}
           onRestartAll={restartAll}
-          onGoHome={() => navigate("/")}
+          onGoHome={() => navigate(backPath)}
         />
       ) : (
         <FlashCard
@@ -151,7 +152,7 @@ function SessionComplete({ gotItCount, reviewCount, totalCount, onRestartReview,
           🔄 Restart All Cards
         </button>
         <button className="btn-primary" onClick={onGoHome}>
-          🏠 Back to Dashboard
+          🏠 Back to Deck
         </button>
       </div>
     </div>

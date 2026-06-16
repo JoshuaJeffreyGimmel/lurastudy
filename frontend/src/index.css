@@ -114,6 +114,15 @@ button:active:not(:disabled) {
   max-width: 960px;
   margin: 0 auto;
   width: 100%;
+  overflow-y: auto;
+}
+
+/* Workspace pages need full width — override .app-main constraints */
+.app-main:has(.workspace) {
+  padding: 0;
+  max-width: 100%;
+  margin: 0;
+  overflow: hidden;
 }
 
 /* ─── Cards / Surfaces ──────────────────────────────────────────────────────── */
