@@ -36,6 +36,11 @@ class Document(Base):
     decks: Mapped[list["Deck"]] = relationship(  # noqa: F821
         "Deck", back_populates="document", cascade="all, delete-orphan"
     )
+    knowledge_bases: Mapped[list["KnowledgeBase"]] = relationship(  # noqa: F821
+        "KnowledgeBase",
+        secondary="knowledge_base_documents",
+        back_populates="documents",
+    )
 
 
 class Chunk(Base):

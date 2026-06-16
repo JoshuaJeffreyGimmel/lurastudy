@@ -42,6 +42,34 @@ async def retrieve_relevant_chunks(
     return list(rows)
 
 
+async def retrieve_relevant_chunks_multi(
+    db: AsyncSession,
+    document_ids: list[uuid.UUID],
+    query: str,
+    top_k: int = 15,
+) -> list[str]:
+    """
+    Embed the query and return the top-k most semantically similar chunk contents
+    across multiple documents (used for Knowledge Base deck generation).
+    """
+    query_embedding = await embed_text(query)
+    embedding_str = "[" + ",".join(str(v) for v in query_embedding) + "]"
+
+    stmt = (
+        select(Chunk.content)
+        .where(Chunk.document_id.in_(document_ids))
+        .where(Chunk.embedding.is_not(None))
+        .order_by(
+            Chunk.embedding.op("<=>")(text(f"'{embedding_str}'::vector"))
+        )
+        .limit(top_k)
+    )
+
+    result = await db.execute(stmt)
+    rows = result.scalars().all()
+    return list(rows)
+
+
 async def get_all_chunks_text(
     db: AsyncSession,
     document_id: uuid.UUID,
@@ -53,6 +81,22 @@ async def get_all_chunks_text(
     stmt = (
         select(Chunk.content)
         .where(Chunk.document_id == document_id)
+        .order_by(Chunk.chunk_index)
+    )
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def get_all_chunks_text_multi(
+    db: AsyncSession,
+    document_ids: list[uuid.UUID],
+) -> list[str]:
+    """
+    Return all chunk contents across multiple documents (fallback for KB generation).
+    """
+    stmt = (
+        select(Chunk.content)
+        .where(Chunk.document_id.in_(document_ids))
         .order_by(Chunk.chunk_index)
     )
     result = await db.execute(stmt)

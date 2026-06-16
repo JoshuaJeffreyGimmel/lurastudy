@@ -4,6 +4,14 @@
   gap: 2rem;
 }
 
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
 .dashboard-header h1 {
   font-size: 1.8rem;
   font-weight: 700;
@@ -13,6 +21,40 @@
 .dashboard-header .subtitle {
   color: var(--color-text-muted);
   font-size: 0.95rem;
+}
+
+/* ─── Source toggle (New Deck modal) ─────────────────────────────────────────── */
+
+.source-toggle {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.source-toggle-btn {
+  flex: 1;
+  padding: 0.55rem 0.75rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #d1d5db);
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--color-text-muted);
+  transition: all 0.15s;
+}
+
+.source-toggle-btn.active {
+  background: var(--color-primary, #6366f1);
+  border-color: var(--color-primary, #6366f1);
+  color: #fff;
+}
+
+.source-toggle-btn:hover:not(.active) {
+  background: var(--color-surface-alt, #f3f4f6);
+  color: var(--color-text);
 }
 
 /* ─── Upload section ────────────────────────────────────────────────────────── */

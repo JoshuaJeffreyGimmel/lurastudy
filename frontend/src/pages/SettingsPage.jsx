@@ -1,0 +1,370 @@
+import React, { useEffect, useState } from "react";
+import {
+  getSettings,
+  updateSettings,
+  testConnection,
+} from "../api/client.js";
+import "./SettingsPage.css";
+
+const OLLAMA_BASE_URL = "http://host.docker.internal:11434/v1";
+const OPENAI_BASE_URL = "https://api.openai.com/v1";
+
+export default function SettingsPage() {
+  const [settings, setSettings] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [successMsg, setSuccessMsg] = useState(null);
+
+  // Local form state
+  const [llmBaseUrl, setLlmBaseUrl] = useState("");
+  const [llmApiKey, setLlmApiKey] = useState("");
+  const [llmModel, setLlmModel] = useState("");
+
+  const [embBaseUrl, setEmbBaseUrl] = useState("");
+  const [embApiKey, setEmbApiKey] = useState("");
+  const [embModel, setEmbModel] = useState("");
+  const [embDimensions, setEmbDimensions] = useState("");
+
+  // Test connection state
+  const [llmTestResult, setLlmTestResult] = useState(null);
+  const [embTestResult, setEmbTestResult] = useState(null);
+  const [testingLlm, setTestingLlm] = useState(false);
+  const [testingEmb, setTestingEmb] = useState(false);
+
+  useEffect(() => {
+    getSettings()
+      .then((data) => {
+        setSettings(data);
+        setLlmBaseUrl(data.llm_base_url);
+        setLlmApiKey(data.llm_api_key);
+        setLlmModel(data.llm_model);
+        setEmbBaseUrl(data.embedding_base_url);
+        setEmbApiKey(data.embedding_api_key);
+        setEmbModel(data.embedding_model);
+        setEmbDimensions(String(data.embedding_dimensions));
+      })
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, []);
+
+  async function handleSave(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+    setSuccessMsg(null);
+    try {
+      const updated = await updateSettings({
+        llm_base_url: llmBaseUrl,
+        llm_api_key: llmApiKey,
+        llm_model: llmModel,
+        embedding_base_url: embBaseUrl,
+        embedding_api_key: embApiKey,
+        embedding_model: embModel,
+        embedding_dimensions: parseInt(embDimensions, 10) || undefined,
+      });
+      setSettings(updated);
+      setSuccessMsg("Settings saved successfully!");
+      setTimeout(() => setSuccessMsg(null), 4000);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTestLlm() {
+    setTestingLlm(true);
+    setLlmTestResult(null);
+    try {
+      const result = await testConnection({
+        type: "llm",
+        base_url: llmBaseUrl,
+        api_key: llmApiKey,
+        model: llmModel,
+      });
+      setLlmTestResult(result);
+    } catch (e) {
+      setLlmTestResult({ success: false, message: e.message });
+    } finally {
+      setTestingLlm(false);
+    }
+  }
+
+  async function handleTestEmb() {
+    setTestingEmb(true);
+    setEmbTestResult(null);
+    try {
+      const result = await testConnection({
+        type: "embedding",
+        base_url: embBaseUrl,
+        api_key: embApiKey,
+        model: embModel,
+      });
+      setEmbTestResult(result);
+    } catch (e) {
+      setEmbTestResult({ success: false, message: e.message });
+    } finally {
+      setTestingEmb(false);
+    }
+  }
+
+  function applyPreset(target, preset) {
+    if (target === "llm") {
+      if (preset === "ollama") {
+        setLlmBaseUrl(OLLAMA_BASE_URL);
+        setLlmApiKey("ollama");
+        setLlmModel("llama3.2");
+      } else if (preset === "openai") {
+        setLlmBaseUrl(OPENAI_BASE_URL);
+        setLlmApiKey("");
+        setLlmModel("gpt-4o-mini");
+      }
+    } else {
+      if (preset === "ollama") {
+        setEmbBaseUrl(OLLAMA_BASE_URL);
+        setEmbApiKey("ollama");
+        setEmbModel("nomic-embed-text");
+        setEmbDimensions("768");
+      } else if (preset === "openai") {
+        setEmbBaseUrl(OPENAI_BASE_URL);
+        setEmbApiKey("");
+        setEmbModel("text-embedding-3-small");
+        setEmbDimensions("1536");
+      }
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="settings-page">
+        <p><span className="spinner" />Loading settings…</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="settings-page">
+      <div className="settings-header">
+        <h1>⚙ Settings</h1>
+        <p className="subtitle">
+          Configure the AI models used for flashcard generation and document embedding.
+          Changes take effect immediately — no restart needed.
+        </p>
+      </div>
+
+      {error && (
+        <div className="banner banner-error" onClick={() => setError(null)} style={{ cursor: "pointer" }}>
+          ⚠ {error} <span style={{ float: "right", opacity: 0.6 }}>✕</span>
+        </div>
+      )}
+      {successMsg && (
+        <div className="banner banner-success">
+          ✓ {successMsg}
+        </div>
+      )}
+
+      <form onSubmit={handleSave} className="settings-form">
+
+        {/* ─── LLM Section ─────────────────────────────────────────────────── */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <div>
+              <h2>🤖 Inference Model</h2>
+              <p className="section-desc">Used to generate flashcards from your documents.</p>
+            </div>
+            <div className="preset-buttons">
+              <span className="preset-label">Quick preset:</span>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => applyPreset("llm", "ollama")}
+              >
+                🦙 Ollama
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => applyPreset("llm", "openai")}
+              >
+                ✦ OpenAI
+              </button>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="llm-base-url">Base URL</label>
+              <input
+                id="llm-base-url"
+                type="text"
+                value={llmBaseUrl}
+                onChange={(e) => setLlmBaseUrl(e.target.value)}
+                placeholder="http://host.docker.internal:11434/v1"
+                className="form-input"
+              />
+              <span className="form-hint">OpenAI-compatible endpoint</span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="llm-api-key">API Key</label>
+              <input
+                id="llm-api-key"
+                type="password"
+                value={llmApiKey}
+                onChange={(e) => setLlmApiKey(e.target.value)}
+                placeholder="ollama  /  sk-..."
+                className="form-input"
+              />
+              <span className="form-hint">Use "ollama" for local Ollama</span>
+            </div>
+
+            <div className="form-group form-group-wide">
+              <label htmlFor="llm-model">Model Name</label>
+              <input
+                id="llm-model"
+                type="text"
+                value={llmModel}
+                onChange={(e) => setLlmModel(e.target.value)}
+                placeholder="llama3.2  /  gpt-4o-mini  /  mistral"
+                className="form-input"
+              />
+              <span className="form-hint">
+                Ollama examples: llama3.2, mistral, gemma3 · OpenAI: gpt-4o-mini, gpt-4o
+              </span>
+            </div>
+          </div>
+
+          <div className="test-row">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestLlm}
+              disabled={testingLlm}
+            >
+              {testingLlm ? <><span className="spinner" />Testing…</> : "🔌 Test Connection"}
+            </button>
+            {llmTestResult && (
+              <TestResult result={llmTestResult} />
+            )}
+          </div>
+        </section>
+
+        {/* ─── Embedding Section ───────────────────────────────────────────── */}
+        <section className="settings-section card">
+          <div className="section-header">
+            <div>
+              <h2>🔢 Embedding Model</h2>
+              <p className="section-desc">
+                Used to convert document text into vectors for semantic search.
+                <strong> Note:</strong> changing this requires re-uploading existing documents.
+              </p>
+            </div>
+            <div className="preset-buttons">
+              <span className="preset-label">Quick preset:</span>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => applyPreset("embedding", "ollama")}
+              >
+                🦙 Ollama
+              </button>
+              <button
+                type="button"
+                className="btn-secondary btn-sm"
+                onClick={() => applyPreset("embedding", "openai")}
+              >
+                ✦ OpenAI
+              </button>
+            </div>
+          </div>
+
+          <div className="form-grid">
+            <div className="form-group">
+              <label htmlFor="emb-base-url">Base URL</label>
+              <input
+                id="emb-base-url"
+                type="text"
+                value={embBaseUrl}
+                onChange={(e) => setEmbBaseUrl(e.target.value)}
+                placeholder="http://host.docker.internal:11434/v1"
+                className="form-input"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="emb-api-key">API Key</label>
+              <input
+                id="emb-api-key"
+                type="password"
+                value={embApiKey}
+                onChange={(e) => setEmbApiKey(e.target.value)}
+                placeholder="ollama  /  sk-..."
+                className="form-input"
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="emb-model">Model Name</label>
+              <input
+                id="emb-model"
+                type="text"
+                value={embModel}
+                onChange={(e) => setEmbModel(e.target.value)}
+                placeholder="nomic-embed-text  /  text-embedding-3-small"
+                className="form-input"
+              />
+              <span className="form-hint">
+                Ollama: nomic-embed-text · OpenAI: text-embedding-3-small
+              </span>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="emb-dimensions">Dimensions</label>
+              <input
+                id="emb-dimensions"
+                type="number"
+                value={embDimensions}
+                onChange={(e) => setEmbDimensions(e.target.value)}
+                placeholder="768"
+                min="1"
+                className="form-input"
+              />
+              <span className="form-hint">768 for nomic · 1536 for text-embedding-3-small</span>
+            </div>
+          </div>
+
+          <div className="test-row">
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={handleTestEmb}
+              disabled={testingEmb}
+            >
+              {testingEmb ? <><span className="spinner" />Testing…</> : "🔌 Test Connection"}
+            </button>
+            {embTestResult && (
+              <TestResult result={embTestResult} />
+            )}
+          </div>
+        </section>
+
+        {/* ─── Save button ─────────────────────────────────────────────────── */}
+        <div className="settings-actions">
+          <button type="submit" className="btn-primary btn-save" disabled={saving}>
+            {saving ? <><span className="spinner" />Saving…</> : "💾 Save Settings"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function TestResult({ result }) {
+  return (
+    <div className={`test-result ${result.success ? "test-success" : "test-failure"}`}>
+      <span className="test-icon">{result.success ? "✓" : "✗"}</span>
+      <span className="test-message">{result.message}</span>
+    </div>
+  );
+}

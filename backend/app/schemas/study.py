@@ -21,7 +21,8 @@ class FlashcardStateUpdate(BaseModel):
 
 class DeckResponse(BaseModel):
     id: uuid.UUID
-    document_id: uuid.UUID
+    document_id: uuid.UUID | None
+    knowledge_base_id: uuid.UUID | None
     title: str
     created_at: datetime
     flashcards: list[FlashcardResponse]
@@ -31,7 +32,8 @@ class DeckResponse(BaseModel):
 
 class DeckSummaryResponse(BaseModel):
     id: uuid.UUID
-    document_id: uuid.UUID
+    document_id: uuid.UUID | None
+    knowledge_base_id: uuid.UUID | None
     title: str
     created_at: datetime
     card_count: int
@@ -45,5 +47,12 @@ class DeckListResponse(BaseModel):
 
 
 class GenerateFlashcardsRequest(BaseModel):
-    document_id: uuid.UUID
+    document_id: uuid.UUID | None = None
+    knowledge_base_id: uuid.UUID | None = None
     max_cards: int = 20
+
+    def model_post_init(self, __context) -> None:
+        if self.document_id is None and self.knowledge_base_id is None:
+            raise ValueError("Either document_id or knowledge_base_id must be provided.")
+        if self.document_id is not None and self.knowledge_base_id is not None:
+            raise ValueError("Provide either document_id or knowledge_base_id, not both.")

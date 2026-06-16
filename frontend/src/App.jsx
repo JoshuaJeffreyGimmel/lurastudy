@@ -1,6 +1,8 @@
 import React from "react";
 import { NavLink, Route, Routes, useNavigate } from "react-router-dom";
 import Dashboard from "./pages/Dashboard.jsx";
+import KnowledgeBasesPage from "./pages/KnowledgeBasesPage.jsx";
+import SettingsPage from "./pages/SettingsPage.jsx";
 import StudyPage from "./pages/StudyPage.jsx";
 import { deleteDeck, listDecks } from "./api/client.js";
 
@@ -11,12 +13,16 @@ export default function App() {
         <span className="brand">📚 LuraStudy</span>
         <NavLink to="/" end>Dashboard</NavLink>
         <NavLink to="/decks">My Decks</NavLink>
+        <NavLink to="/knowledge-bases">Knowledge Bases</NavLink>
+        <NavLink to="/settings" className="nav-settings">⚙ Settings</NavLink>
       </nav>
       <main className="app-main">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/decks" element={<DecksPage />} />
+          <Route path="/knowledge-bases" element={<KnowledgeBasesPage />} />
           <Route path="/study/:deckId" element={<StudyPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>
     </div>

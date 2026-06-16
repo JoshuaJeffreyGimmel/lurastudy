@@ -103,6 +103,11 @@ button:active:not(:disabled) {
   text-decoration: none;
 }
 
+/* Push Settings link to the far right */
+.app-nav .nav-settings {
+  margin-left: auto;
+}
+
 .app-main {
   flex: 1;
   padding: 2rem;

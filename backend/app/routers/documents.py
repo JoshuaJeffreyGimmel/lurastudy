@@ -15,6 +15,12 @@ from app.config import settings
 from app.database import get_db
 from app.models.document import Chunk, Document
 from app.schemas.document import DocumentListResponse, DocumentResponse
+from app.services.config_store import (
+    EMBEDDING_API_KEY,
+    EMBEDDING_BASE_URL,
+    EMBEDDING_MODEL,
+    get_all_settings,
+)
 from app.services.embeddings import embed_texts
 from app.services.ingestion import chunk_text, extract_text
 
@@ -96,9 +102,22 @@ async def upload_document(
         if not chunks:
             raise ValueError("Document produced no usable text chunks.")
 
+        # Load embedding config from DB (falls back to .env defaults)
+        cfg = await get_all_settings(db)
+        emb_base_url = cfg[EMBEDDING_BASE_URL]
+        emb_api_key = cfg[EMBEDDING_API_KEY]
+        emb_model = cfg[EMBEDDING_MODEL]
+
         # Generate embeddings
-        logger.info("Generating embeddings for %d chunks...", len(chunks))
-        embeddings = await embed_texts(chunks)
+        logger.info(
+            "Generating embeddings for %d chunks (model=%s)...", len(chunks), emb_model
+        )
+        embeddings = await embed_texts(
+            chunks,
+            embedding_base_url=emb_base_url,
+            embedding_api_key=emb_api_key,
+            embedding_model=emb_model,
+        )
 
         # Store chunks with embeddings
         for idx, (content, embedding) in enumerate(zip(chunks, embeddings)):

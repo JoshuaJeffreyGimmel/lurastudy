@@ -10,7 +10,7 @@ import aiofiles
 from pypdf import PdfReader
 
 # Chunking parameters
-MIN_CHUNK_CHARS = 100
+MIN_CHUNK_CHARS = 20
 MAX_CHUNK_CHARS = 1500
 
 

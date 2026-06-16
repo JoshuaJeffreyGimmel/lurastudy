@@ -14,8 +14,12 @@ class Deck(Base):
     id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
-    document_id: Mapped[uuid.UUID] = mapped_column(
-        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False
+    # Either document_id OR knowledge_base_id will be set (not both)
+    document_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=True
+    )
+    knowledge_base_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("knowledge_bases.id", ondelete="CASCADE"), nullable=True
     )
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -24,6 +28,9 @@ class Deck(Base):
 
     document: Mapped["Document"] = relationship(  # noqa: F821
         "Document", back_populates="decks"
+    )
+    knowledge_base: Mapped["KnowledgeBase"] = relationship(  # noqa: F821
+        "KnowledgeBase", back_populates="decks"
     )
     flashcards: Mapped[list["Flashcard"]] = relationship(
         "Flashcard", back_populates="deck", cascade="all, delete-orphan"
