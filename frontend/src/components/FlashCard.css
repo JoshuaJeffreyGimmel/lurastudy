@@ -12,8 +12,8 @@
 .flashcard-progress {
   width: 100%;
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.5rem;
 }
 
 .progress-bar {
@@ -31,10 +31,47 @@
   transition: width 0.4s ease;
 }
 
+.progress-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 .progress-label {
   font-size: 0.8rem;
   color: var(--color-text-muted);
   white-space: nowrap;
+}
+
+/* ─── Due / status labels ───────────────────────────────────────────────────── */
+.due-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.due-label-new {
+  background: rgba(99, 102, 241, 0.12);
+  color: var(--color-primary);
+}
+
+.due-label-today {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--color-success);
+}
+
+.due-label-overdue {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--color-danger);
+}
+
+.rep-label {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-left: auto;
 }
 
 /* ─── Flip card ─────────────────────────────────────────────────────────────── */
@@ -112,14 +149,16 @@
   bottom: 1rem;
 }
 
-/* ─── Action buttons ────────────────────────────────────────────────────────── */
+/* ─── SM-2 Rating buttons ───────────────────────────────────────────────────── */
 .flashcard-actions {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   opacity: 0;
   pointer-events: none;
   transform: translateY(8px);
   transition: opacity 0.25s ease, transform 0.25s ease;
+  width: 100%;
+  justify-content: center;
 }
 
 .flashcard-actions.visible {
@@ -128,11 +167,53 @@
   transform: translateY(0);
 }
 
-.flashcard-actions button {
-  min-width: 140px;
-  padding: 0.65rem 1.5rem;
-  font-size: 0.95rem;
+.rating-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 100px;
+  padding: 0.6rem 1rem;
+  border-radius: var(--radius);
   font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.rating-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.rating-btn:active {
+  transform: translateY(0);
+}
+
+.rating-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.rating-label {
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.rating-hint {
+  font-size: 0.65rem;
+  opacity: 0.75;
+  font-weight: 400;
+}
+
+/* Easy button — distinct blue/indigo style */
+.btn-easy {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+}
+
+.btn-easy:hover {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
 }
 
 /* ─── Flip CTA ──────────────────────────────────────────────────────────────── */

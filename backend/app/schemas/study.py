@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas.document import DocumentResponse
 
@@ -12,13 +12,31 @@ class FlashcardResponse(BaseModel):
     front: str
     back: str
     card_index: int
+    # Legacy field — kept for backward compatibility
     got_it: bool | None
+    # SM-2 Spaced Repetition fields
+    due_date: date | None
+    sm2_repetitions: int
+    sm2_ease_factor: float
+    sm2_interval: int
 
     model_config = {"from_attributes": True}
 
 
 class FlashcardStateUpdate(BaseModel):
+    """Legacy endpoint body — kept for backward compatibility."""
     got_it: bool
+
+
+class FlashcardReviewUpdate(BaseModel):
+    """SM-2 review update. quality is 0–5 per the SM-2 spec.
+
+    Convenience mappings used by the frontend:
+      5 → Easy (perfect recall)
+      4 → Got It (correct with hesitation)
+      1 → Again / Review Later (incorrect)
+    """
+    quality: int = Field(..., ge=0, le=5, description="SM-2 quality rating 0–5")
 
 
 # ─── Deck schemas ──────────────────────────────────────────────────────────────
@@ -53,6 +71,7 @@ class DeckSummaryResponse(BaseModel):
     updated_at: datetime
     source_count: int
     card_count: int
+    due_count: int = 0
     source_documents: list[DocumentResponse] = []
 
     model_config = {"from_attributes": True}
@@ -63,11 +82,38 @@ class DeckListResponse(BaseModel):
     total: int
 
 
+class DeckDueResponse(BaseModel):
+    """Response for the /due endpoint — only cards due today or overdue."""
+    deck_id: uuid.UUID
+    due_cards: list[FlashcardResponse]
+    due_count: int
+    total_count: int
+
+
 # ─── Flashcard generation ──────────────────────────────────────────────────────
 
 class GenerateFlashcardsRequest(BaseModel):
     """Generate flashcards from the deck's own source documents."""
     max_cards: int = 20
+
+
+# ─── Quiz ──────────────────────────────────────────────────────────────────────
+
+class GenerateQuizRequest(BaseModel):
+    """Generate a multiple-choice quiz from the deck's own source documents."""
+    max_questions: int = 10
+
+
+class QuizQuestion(BaseModel):
+    question: str
+    options: list[str]       # always 4 items
+    correct_index: int       # 0-based index into options
+    explanation: str
+
+
+class QuizResponse(BaseModel):
+    deck_id: uuid.UUID
+    questions: list[QuizQuestion]
 
 
 # ─── Chat ──────────────────────────────────────────────────────────────────────

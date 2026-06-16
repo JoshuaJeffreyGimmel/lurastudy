@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard.jsx";
 import DecksPage from "./pages/DecksPage.jsx";
 import DeckWorkspacePage from "./pages/DeckWorkspacePage.jsx";
 import DocumentsPage from "./pages/DocumentsPage.jsx";
+import QuizPage from "./pages/QuizPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
 import StudyPage from "./pages/StudyPage.jsx";
 
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/decks/:deckId" element={<DeckWorkspacePage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/study/:deckId" element={<StudyPage />} />
+          <Route path="/quiz/:deckId" element={<QuizPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </main>

@@ -109,10 +109,44 @@ export async function chatWithDeck(deckId, message, history = []) {
 
 // ─── Flashcard State ──────────────────────────────────────────────────────────
 
+/** Legacy endpoint — kept for backward compatibility. */
 export async function updateFlashcardState(flashcardId, gotIt) {
   return request("PATCH", `/study/flashcards/${flashcardId}`, {
     got_it: gotIt,
   });
+}
+
+/**
+ * SM-2 review endpoint.
+ * quality: 0–5
+ *   5 = Easy (perfect recall)
+ *   4 = Got It (correct with hesitation)
+ *   1 = Again / Review Later (incorrect)
+ */
+export async function reviewFlashcard(flashcardId, quality) {
+  return request("PATCH", `/study/flashcards/${flashcardId}/review`, {
+    quality,
+  });
+}
+
+// ─── Quiz ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Generate a multiple-choice quiz from the deck's source documents.
+ * Response: { deck_id, questions: [{ question, options, correct_index, explanation }] }
+ */
+export async function generateDeckQuiz(deckId, maxQuestions = 10) {
+  return request("POST", `/study/decks/${deckId}/quiz`, { max_questions: maxQuestions });
+}
+
+// ─── Due Cards ────────────────────────────────────────────────────────────────
+
+/**
+ * Returns only the cards that are due today or overdue for a given deck.
+ * Response: { deck_id, due_cards, due_count, total_count }
+ */
+export async function getDueCards(deckId) {
+  return request("GET", `/study/decks/${deckId}/due`);
 }
 
 // ─── Knowledge Bases ──────────────────────────────────────────────────────────

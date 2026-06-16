@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Table, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -66,10 +66,20 @@ class Flashcard(Base):
     front: Mapped[str] = mapped_column(Text, nullable=False)
     back: Mapped[str] = mapped_column(Text, nullable=False)
     card_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    # Study state: null = unseen, true = got it, false = review later
+    # Legacy study state (kept for backward compatibility)
     got_it: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+    # ── SM-2 Spaced Repetition fields ──────────────────────────────────────────
+    # due_date: null means the card is new/unseen (treat as due immediately)
+    due_date: Mapped[date | None] = mapped_column(Date, nullable=True, default=None)
+    # Number of consecutive correct reviews
+    sm2_repetitions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # Ease factor — how quickly the interval grows (min 1.3, starts at 2.5)
+    sm2_ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)
+    # Current interval in days between reviews
+    sm2_interval: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
 
     deck: Mapped["Deck"] = relationship("Deck", back_populates="flashcards")

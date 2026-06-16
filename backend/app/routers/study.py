@@ -4,6 +4,7 @@ Handles deck CRUD, flashcard generation, card state updates, and deck chat.
 """
 import logging
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -17,13 +18,17 @@ from app.schemas.study import (
     ChatRequest,
     ChatResponse,
     DeckCreate,
+    DeckDueResponse,
     DeckListResponse,
     DeckResponse,
     DeckSummaryResponse,
     DeckUpdate,
     FlashcardResponse,
+    FlashcardReviewUpdate,
     FlashcardStateUpdate,
     GenerateFlashcardsRequest,
+    GenerateQuizRequest,
+    QuizResponse,
 )
 from app.services.config_store import (
     LLM_API_KEY,
@@ -31,11 +36,12 @@ from app.services.config_store import (
     LLM_MODEL,
     get_all_settings,
 )
-from app.services.llm import chat_with_sources, generate_flashcards
+from app.services.llm import chat_with_sources, generate_flashcards, generate_quiz
 from app.services.rag import (
     get_all_chunks_text_multi,
     retrieve_relevant_chunks_multi,
 )
+from app.services.sm2 import apply_sm2, is_due
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +67,11 @@ async def _load_deck(deck_id: uuid.UUID, db: AsyncSession) -> Deck:
     return deck
 
 
+def _due_count(flashcards: list[Flashcard]) -> int:
+    """Count how many cards in a list are due today or overdue."""
+    return sum(1 for c in flashcards if is_due(c.due_date))
+
+
 # ─── Deck CRUD ────────────────────────────────────────────────────────────────
 
 @router.post("/decks", response_model=DeckResponse, status_code=status.HTTP_201_CREATED)
@@ -80,7 +91,7 @@ async def create_deck(
 async def list_decks(
     db: AsyncSession = Depends(get_db),
 ):
-    """Return all decks with summary info."""
+    """Return all decks with summary info including due card counts."""
     stmt = (
         select(Deck)
         .options(selectinload(Deck.source_documents), selectinload(Deck.flashcards))
@@ -98,6 +109,7 @@ async def list_decks(
             updated_at=deck.updated_at,
             source_count=len(deck.source_documents),
             card_count=len(deck.flashcards),
+            due_count=_due_count(deck.flashcards),
             source_documents=deck.source_documents,
         )
         for deck in decks
@@ -274,6 +286,11 @@ async def generate_deck_flashcards(
             back=card["back"],
             card_index=idx,
             got_it=None,
+            # SM-2 defaults — new card, due immediately
+            due_date=None,
+            sm2_repetitions=0,
+            sm2_ease_factor=2.5,
+            sm2_interval=1,
         )
         db.add(flashcard)
 
@@ -281,6 +298,38 @@ async def generate_deck_flashcards(
     logger.info("Generated %d flashcards for deck '%s'.", len(card_data), deck_id)
 
     return await _load_deck(deck_id, db)
+
+
+# ─── Due Cards ────────────────────────────────────────────────────────────────
+
+@router.get("/decks/{deck_id}/due", response_model=DeckDueResponse)
+async def get_due_cards(
+    deck_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Return only the flashcards that are due today or overdue (including new/unseen cards).
+    Cards are sorted: overdue first, then new (null due_date), then by card_index.
+    """
+    deck = await _load_deck(deck_id, db)
+
+    due_cards = [c for c in deck.flashcards if is_due(c.due_date)]
+
+    # Sort: overdue (earliest due_date first), then new cards (due_date is None), then by card_index
+    def sort_key(card: Flashcard):
+        if card.due_date is None:
+            # New cards come after overdue but before future cards
+            return (1, date.today(), card.card_index)
+        return (0, card.due_date, card.card_index)
+
+    due_cards.sort(key=sort_key)
+
+    return DeckDueResponse(
+        deck_id=deck_id,
+        due_cards=due_cards,
+        due_count=len(due_cards),
+        total_count=len(deck.flashcards),
+    )
 
 
 # ─── Deck Chat ────────────────────────────────────────────────────────────────
@@ -357,7 +406,134 @@ async def chat_with_deck(
     return ChatResponse(reply=reply)
 
 
-# ─── Flashcard State ──────────────────────────────────────────────────────────
+# ─── Quiz Generation ─────────────────────────────────────────────────────────
+
+@router.post("/decks/{deck_id}/quiz", response_model=QuizResponse)
+async def generate_deck_quiz(
+    deck_id: uuid.UUID,
+    request: GenerateQuizRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Generate a multiple-choice quiz from all source documents in the deck.
+    Questions are generated fresh each time (not persisted).
+    """
+    deck = await _load_deck(deck_id, db)
+
+    if not deck.source_documents:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This deck has no source documents. Add at least one document before generating a quiz.",
+        )
+
+    ready_docs = [d for d in deck.source_documents if d.status == "ready"]
+    if not ready_docs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No ready documents found in this deck. Please wait for document processing to complete.",
+        )
+
+    # Load LLM config
+    cfg = await get_all_settings(db)
+    llm_base_url = cfg[LLM_BASE_URL]
+    llm_api_key = cfg[LLM_API_KEY]
+    llm_model = cfg[LLM_MODEL]
+
+    doc_ids = [d.id for d in ready_docs]
+
+    logger.info(
+        "Generating quiz for deck '%s' (model=%s, %d docs)",
+        deck_id, llm_model, len(ready_docs),
+    )
+
+    try:
+        context_chunks = await retrieve_relevant_chunks_multi(
+            db=db,
+            document_ids=doc_ids,
+            query="key concepts, definitions, important facts, and main ideas",
+            top_k=min(15, request.max_questions),
+        )
+    except Exception as e:
+        logger.warning("RAG retrieval failed for quiz (%s), falling back to all chunks.", e)
+        context_chunks = await get_all_chunks_text_multi(db=db, document_ids=doc_ids)
+
+    if not context_chunks:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No text content found in the deck's source documents.",
+        )
+
+    try:
+        question_data = await generate_quiz(
+            context_chunks=context_chunks,
+            max_questions=request.max_questions,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
+            llm_model=llm_model,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM quiz generation failed: {str(e)}",
+        )
+    except Exception as e:
+        logger.error("Unexpected LLM error during quiz generation: %s", e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect to the LLM ({llm_model} @ {llm_base_url}). "
+                   "Please check your LLM configuration in Settings.",
+        )
+
+    logger.info("Generated %d quiz questions for deck '%s'.", len(question_data), deck_id)
+
+    return QuizResponse(deck_id=deck_id, questions=question_data)
+
+
+# ─── Flashcard Review (SM-2) ──────────────────────────────────────────────────
+
+@router.patch("/flashcards/{flashcard_id}/review", response_model=FlashcardResponse)
+async def review_flashcard(
+    flashcard_id: uuid.UUID,
+    update: FlashcardReviewUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Submit an SM-2 review for a flashcard.
+
+    quality 0–5:
+      5 = Easy (perfect recall)
+      4 = Got It (correct with hesitation)
+      3 = Hard (correct but very difficult)
+      1 = Again (incorrect, remembered after seeing answer)
+      0 = Blackout (complete failure)
+    """
+    stmt = select(Flashcard).where(Flashcard.id == flashcard_id)
+    result = await db.execute(stmt)
+    flashcard = result.scalar_one_or_none()
+
+    if not flashcard:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flashcard not found")
+
+    # Apply SM-2 algorithm
+    new_reps, new_ef, new_interval, new_due_date = apply_sm2(
+        repetitions=flashcard.sm2_repetitions,
+        ease_factor=flashcard.sm2_ease_factor,
+        interval=flashcard.sm2_interval,
+        quality=update.quality,
+    )
+
+    flashcard.sm2_repetitions = new_reps
+    flashcard.sm2_ease_factor = new_ef
+    flashcard.sm2_interval = new_interval
+    flashcard.due_date = new_due_date
+
+    # Also update legacy got_it field for backward compatibility
+    flashcard.got_it = update.quality >= 3
+
+    await db.flush()
+    await db.refresh(flashcard)
+    return flashcard
+
 
 @router.patch("/flashcards/{flashcard_id}", response_model=FlashcardResponse)
 async def update_flashcard_state(
@@ -365,7 +541,10 @@ async def update_flashcard_state(
     update: FlashcardStateUpdate,
     db: AsyncSession = Depends(get_db),
 ):
-    """Update the 'got_it' state of a flashcard (true = got it, false = review later)."""
+    """
+    Legacy endpoint: Update the 'got_it' state of a flashcard.
+    Prefer PATCH /flashcards/{id}/review for SM-2 scheduling.
+    """
     stmt = select(Flashcard).where(Flashcard.id == flashcard_id)
     result = await db.execute(stmt)
     flashcard = result.scalar_one_or_none()

@@ -2,17 +2,21 @@
 
 > Local-first, self-hosted AI study assistant — a privacy-focused alternative to NotebookLM for students.
 
-Upload your study materials (PDF, TXT, Markdown) and instantly generate interactive flashcard decks powered by any OpenAI-compatible LLM (Ollama, OpenAI, vLLM, etc.).
+Upload your study materials (PDF, TXT, Markdown, DOCX, and more) and instantly generate interactive flashcard decks, chat with your documents, and preview exactly what the AI extracted — all powered by any OpenAI-compatible LLM (Ollama, OpenAI, vLLM, etc.).
 
 ---
 
-## ✨ Features (MVP)
+## ✨ Features
 
-- **Document Ingestion** — Upload `.pdf`, `.txt`, `.md` files; text is extracted, chunked, and embedded automatically
+- **Document Ingestion** — Upload `.pdf`, `.txt`, `.md`, `.docx`, `.pptx`, `.xlsx`, `.html`, `.csv`, `.xml`, `.ipynb`; text is extracted, chunked, and embedded automatically
+- **Document Preview / Chunk Viewer** — Inspect every text chunk extracted from a document, with live search and highlighting, to verify what the AI actually sees
 - **RAG Pipeline** — pgvector cosine-similarity search retrieves the most relevant context before generation
+- **Deck Workspace** — Create decks, attach source documents, chat with AI, and manage flashcards all in one place
+- **AI Chat** — Ask questions about your source documents; the AI answers using RAG-grounded context
 - **AI Flashcard Generation** — Structured JSON prompts force the LLM to produce clean `front`/`back` card pairs
 - **Interactive Study UI** — CSS 3D flip-card animation, "Got It ✓" / "Review Later ↩" tracking, session completion screen
-- **Deck Persistence** — All decks and card states are saved to PostgreSQL
+- **Deck & Card Persistence** — All decks, cards, and study states are saved to PostgreSQL
+- **Settings UI** — Configure LLM and embedding endpoints live from the browser; test your connection without restarting
 - **Local-first** — Works entirely with Ollama; no data leaves your machine
 
 ---
@@ -50,7 +54,7 @@ docker compose up --build
 
 ## ⚙️ Configuration
 
-All configuration is done via the `.env` file (copy from `.env.example`):
+All configuration is done via the `.env` file (copy from `.env.example`) or live through the **Settings** page in the UI:
 
 | Variable              | Default                                    | Description                        |
 |-----------------------|--------------------------------------------|------------------------------------|
@@ -87,25 +91,39 @@ lurastudy-dev/
 │   │   ├── main.py             # App entry point, CORS, startup
 │   │   ├── config.py           # Pydantic settings
 │   │   ├── database.py         # SQLAlchemy async engine
-│   │   ├── models/             # ORM models (Document, Chunk, Deck, Flashcard)
+│   │   ├── models/             # ORM models
+│   │   │   ├── document.py     # Document + Chunk
+│   │   │   ├── study.py        # Deck + Flashcard
+│   │   │   ├── knowledge_base.py
+│   │   │   └── settings.py
 │   │   ├── schemas/            # Pydantic request/response schemas
-│   │   ├── routers/            # API endpoints (/documents, /study)
+│   │   ├── routers/            # API endpoints
+│   │   │   ├── documents.py    # /documents
+│   │   │   ├── study.py        # /study/decks, /study/flashcards
+│   │   │   ├── knowledge_bases.py
+│   │   │   └── settings.py
 │   │   └── services/
 │   │       ├── ingestion.py    # Text extraction + chunking
 │   │       ├── embeddings.py   # OpenAI-compatible embedding client
 │   │       ├── rag.py          # pgvector semantic search
-│   │       └── llm.py          # LLM connector + JSON parsing
+│   │       ├── llm.py          # LLM connector + JSON parsing
+│   │       └── config_store.py # DB-backed settings store
 │   └── requirements.txt
 │
 ├── frontend/                   # React + Vite
 │   └── src/
 │       ├── api/client.js       # Fetch wrapper for all API calls
 │       ├── components/
-│       │   ├── FlashCard.jsx   # 3D CSS flip card component
-│       │   └── UploadZone.jsx  # Drag-and-drop file upload
+│       │   ├── FlashCard.jsx           # 3D CSS flip card
+│       │   ├── UploadZone.jsx          # Drag-and-drop file upload
+│       │   └── DocumentPreviewModal.jsx # Chunk viewer modal
 │       └── pages/
-│           ├── Dashboard.jsx   # Document list + upload
-│           └── StudyPage.jsx   # Flashcard study session
+│           ├── Dashboard.jsx           # Home — upload + quick stats
+│           ├── DecksPage.jsx           # Deck list
+│           ├── DeckWorkspacePage.jsx   # Chat + flashcard workspace
+│           ├── StudyPage.jsx           # Flashcard study session
+│           ├── DocumentsPage.jsx       # Document library + preview
+│           └── SettingsPage.jsx        # LLM/embedding configuration
 │
 └── postgres/
     └── init.sql                # CREATE EXTENSION IF NOT EXISTS vector
@@ -117,16 +135,38 @@ lurastudy-dev/
 
 Full interactive docs available at **http://localhost:8000/docs**
 
-| Method | Endpoint                          | Description                        |
-|--------|-----------------------------------|------------------------------------|
-| POST   | `/api/v1/documents/upload`        | Upload a document                  |
-| GET    | `/api/v1/documents`               | List all documents                 |
-| DELETE | `/api/v1/documents/{id}`          | Delete a document                  |
-| POST   | `/api/v1/study/generate/flashcards` | Generate a flashcard deck        |
-| GET    | `/api/v1/study/decks`             | List all decks                     |
-| GET    | `/api/v1/study/decks/{id}`        | Get a deck with all cards          |
-| PATCH  | `/api/v1/study/flashcards/{id}`   | Update card state (got_it)         |
-| DELETE | `/api/v1/study/decks/{id}`        | Delete a deck                      |
+### Documents
+
+| Method | Endpoint                              | Description                        |
+|--------|---------------------------------------|------------------------------------|
+| POST   | `/api/v1/documents/upload`            | Upload a document                  |
+| GET    | `/api/v1/documents`                   | List all documents                 |
+| GET    | `/api/v1/documents/{id}`              | Get a single document              |
+| GET    | `/api/v1/documents/{id}/chunks`       | Get all extracted text chunks      |
+| DELETE | `/api/v1/documents/{id}`              | Delete a document                  |
+
+### Decks & Flashcards
+
+| Method | Endpoint                                    | Description                        |
+|--------|---------------------------------------------|------------------------------------|
+| POST   | `/api/v1/study/decks`                       | Create a new deck                  |
+| GET    | `/api/v1/study/decks`                       | List all decks                     |
+| GET    | `/api/v1/study/decks/{id}`                  | Get a deck with cards              |
+| PATCH  | `/api/v1/study/decks/{id}`                  | Update deck title/description      |
+| DELETE | `/api/v1/study/decks/{id}`                  | Delete a deck                      |
+| POST   | `/api/v1/study/decks/{id}/documents/{docId}`| Add source document to deck        |
+| DELETE | `/api/v1/study/decks/{id}/documents/{docId}`| Remove source document from deck   |
+| POST   | `/api/v1/study/decks/{id}/generate`         | Generate flashcards from sources   |
+| POST   | `/api/v1/study/decks/{id}/chat`             | Chat with AI about deck sources    |
+| PATCH  | `/api/v1/study/flashcards/{id}`             | Update card state (got_it)         |
+
+### Settings
+
+| Method | Endpoint                              | Description                        |
+|--------|---------------------------------------|------------------------------------|
+| GET    | `/api/v1/settings`                    | Get current LLM/embedding config   |
+| PATCH  | `/api/v1/settings`                    | Update settings                    |
+| POST   | `/api/v1/settings/test-connection`    | Test LLM connectivity              |
 
 ---
 
