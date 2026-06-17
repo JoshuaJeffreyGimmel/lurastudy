@@ -182,6 +182,97 @@ export async function deleteKnowledgeBase(id) {
   return request("DELETE", `/knowledge-bases/${id}`);
 }
 
+// ─── Chat Conversations (History) ────────────────────────────────────────────
+
+/**
+ * List all saved conversations for a deck.
+ * Response: { conversations: [...], total }
+ */
+export async function listConversations(deckId) {
+  return request("GET", `/history/decks/${deckId}/conversations`);
+}
+
+/**
+ * Create a new conversation for a deck.
+ * Response: { id, deck_id, title, created_at, updated_at, messages: [] }
+ */
+export async function createConversation(deckId, title = "New Chat") {
+  return request("POST", `/history/decks/${deckId}/conversations`, { title });
+}
+
+/**
+ * Load a conversation with all its messages.
+ */
+export async function getConversation(convId) {
+  return request("GET", `/history/conversations/${convId}`);
+}
+
+/**
+ * Delete a conversation.
+ */
+export async function deleteConversation(convId) {
+  return request("DELETE", `/history/conversations/${convId}`);
+}
+
+/**
+ * Rename a conversation.
+ */
+export async function renameConversation(convId, title) {
+  return request("PATCH", `/history/conversations/${convId}/title`, { title });
+}
+
+/**
+ * Send a message in a conversation. Returns the AI reply message.
+ * Response: { id, conversation_id, role: "assistant", content, created_at }
+ */
+export async function chatInConversation(convId, message) {
+  return request("POST", `/history/conversations/${convId}/chat`, { message });
+}
+
+// ─── Quiz History ─────────────────────────────────────────────────────────────
+
+/**
+ * List all saved quizzes for a deck.
+ * Response: { quizzes: [...], total }
+ */
+export async function listQuizHistory(deckId) {
+  return request("GET", `/history/decks/${deckId}/quizzes`);
+}
+
+/**
+ * Save a newly generated quiz to the database.
+ * Response: { id, deck_id, title, questions, created_at, attempts: [] }
+ */
+export async function saveQuiz(deckId, title, questions) {
+  return request("POST", `/history/decks/${deckId}/quizzes`, { title, questions });
+}
+
+/**
+ * Load a saved quiz with all its attempts.
+ */
+export async function getQuiz(quizId) {
+  return request("GET", `/history/quizzes/${quizId}`);
+}
+
+/**
+ * Delete a saved quiz.
+ */
+export async function deleteQuiz(quizId) {
+  return request("DELETE", `/history/quizzes/${quizId}`);
+}
+
+/**
+ * Save a completed quiz attempt.
+ * answers: { "0": 2, "1": 0, ... }
+ */
+export async function saveQuizAttempt(quizId, answers, score, total) {
+  return request("POST", `/history/quizzes/${quizId}/attempts`, {
+    answers,
+    score,
+    total,
+  });
+}
+
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export async function getSettings() {

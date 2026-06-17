@@ -52,6 +52,12 @@ class Deck(Base):
     flashcards: Mapped[list["Flashcard"]] = relationship(
         "Flashcard", back_populates="deck", cascade="all, delete-orphan"
     )
+    chat_conversations: Mapped[list["ChatConversation"]] = relationship(  # noqa: F821
+        "ChatConversation", back_populates="deck", cascade="all, delete-orphan"
+    )
+    quizzes: Mapped[list["Quiz"]] = relationship(  # noqa: F821
+        "Quiz", back_populates="deck", cascade="all, delete-orphan"
+    )
 
 
 class Flashcard(Base):
