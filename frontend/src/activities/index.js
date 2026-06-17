@@ -14,6 +14,7 @@
 import FlashcardPanel from "./flashcard/Panel.jsx";
 import QuizPanel from "./quiz/Panel.jsx";
 import ClozePanel from "./cloze/Panel.jsx";
+import CalculationPanel from "./calculation/Panel.jsx";
 
 // ─── Activity Type Metadata ──────────────────────────────────────────────────
 // These mirror what the backend returns from GET /activities.
@@ -50,6 +51,16 @@ export const ACTIVITY_METADATA = {
     generate_label: "✨ Generate",
     max_items_label: "Cards",
   },
+  calculation: {
+    id: "calculation",
+    name: "Numerical",
+    icon: "🔢",
+    description: "Generate calculation problems with numeric answers",
+    has_spaced_repetition: true,
+    max_items_param: "max_cards",
+    generate_label: "✨ Generate",
+    max_items_label: "Problems",
+  },
 };
 
 // ─── Activity Components ──────────────────────────────────────────────────────
@@ -59,6 +70,7 @@ export const ACTIVITY_COMPONENTS = {
   flashcard: FlashcardPanel,
   quiz: QuizPanel,
   cloze: ClozePanel,
+  calculation: CalculationPanel,
 };
 
 /**

@@ -13,6 +13,7 @@ The frontend can list available types via ``GET /api/v1/activities``.
 from app.activities.flashcard import FlashcardActivity
 from app.activities.quiz import QuizActivity
 from app.activities.cloze import ClozeActivity
+from app.activities.calculation import CalculationActivity
 from app.activities.base import ActivityType
 
 # ── Registry ───────────────────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ ACTIVITY_TYPES: dict[str, ActivityType] = {
     "flashcard": FlashcardActivity,
     "quiz": QuizActivity,
     "cloze": ClozeActivity,
+    "calculation": CalculationActivity,
     # Add new types here:
     # "true_false": TrueFalseActivity,
 }
@@ -79,4 +81,5 @@ __all__ = [
     "FlashcardActivity",
     "QuizActivity",
     "ClozeActivity",
+    "CalculationActivity",
 ]
