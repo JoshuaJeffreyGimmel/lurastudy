@@ -12,12 +12,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.activities import get_activity, list_activities
 from app.database import get_db
 from app.dependencies import get_current_user
 from app.models.document import Document
 from app.models.study import Deck, Flashcard
 from app.models.user import User
 from app.schemas.study import (
+    ActivityGenerateRequest,
+    ActivityTypeResponse,
     ChatRequest,
     ChatResponse,
     DeckCreate,
@@ -39,7 +42,12 @@ from app.services.config_store import (
     LLM_MODEL,
     get_all_settings,
 )
-from app.services.llm import chat_with_sources, generate_flashcards, generate_quiz
+from app.services.llm import (
+    chat_with_sources,
+    generate_activity_items,
+    generate_flashcards,
+    generate_quiz,
+)
 from app.services.rag import (
     get_all_chunks_text_multi,
     retrieve_relevant_chunks_multi,
@@ -166,6 +174,127 @@ async def delete_deck(
     if not deck:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Deck not found")
     await db.delete(deck)
+
+
+# ─── Activity Types ────────────────────────────────────────────────────────────
+
+@router.get("/activities", response_model=list[ActivityTypeResponse])
+async def list_activity_types():
+    """Return all registered activity types the frontend can display."""
+    return list_activities()
+
+
+@router.post("/decks/{deck_id}/activities/{activity_type}/generate", response_model=DeckResponse)
+async def generate_activity(
+    deck_id: uuid.UUID,
+    activity_type: str,
+    request: ActivityGenerateRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Generate items for any registered activity type.
+
+    - ``activity_type`` is one of the IDs returned by ``GET /activities``.
+    - The request body contains ``max_items`` (default 20).
+
+    This replaces the old separate ``/generate`` and ``/quiz`` endpoints.
+    Items are saved via the activity type's own ``save_to_db`` method.
+    """
+    deck = await _load_deck(deck_id, current_user.id, db)
+
+    # Validate activity type
+    try:
+        activity = get_activity(activity_type)
+    except KeyError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    if not deck.source_documents:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="This deck has no source documents. Add at least one document first.",
+        )
+
+    ready_docs = [d for d in deck.source_documents if d.status == "ready"]
+    if not ready_docs:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No ready documents found. Please wait for document processing to complete.",
+        )
+
+    cfg = await get_all_settings(db, current_user.id)
+    llm_base_url = cfg[LLM_BASE_URL]
+    llm_api_key = cfg[LLM_API_KEY]
+    llm_model = cfg[LLM_MODEL]
+
+    doc_ids = [d.id for d in ready_docs]
+    max_items = request.max_items
+
+    logger.info(
+        "Generating '%s' for deck '%s' (model=%s, %d docs, max=%d)",
+        activity_type, deck_id, llm_model, len(ready_docs), max_items,
+    )
+
+    # Retrieve context chunks
+    try:
+        context_chunks = await retrieve_relevant_chunks_multi(
+            db=db,
+            document_ids=doc_ids,
+            query="key concepts, definitions, important facts, and main ideas",
+            top_k=min(15, max_items),
+        )
+    except Exception as e:
+        logger.warning("RAG retrieval failed (%s), falling back to all chunks.", e)
+        context_chunks = await get_all_chunks_text_multi(db=db, document_ids=doc_ids)
+
+    if not context_chunks:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="No text content found in the deck's source documents.",
+        )
+
+    # Generate items
+    try:
+        items = await generate_activity_items(
+            activity_type=activity_type,
+            context_chunks=context_chunks,
+            max_items=max_items,
+            llm_base_url=llm_base_url,
+            llm_api_key=llm_api_key,
+            llm_model=llm_model,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"LLM generation failed: {str(e)}",
+        )
+    except Exception as e:
+        logger.error("Unexpected LLM error for '%s': %s", activity_type, e)
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Failed to connect to the LLM ({llm_model} @ {llm_base_url}). "
+                   "Please check your LLM configuration in Settings.",
+        )
+
+    # Save to database using the activity type's own persistence logic
+    try:
+        await activity.save_to_db(
+            deck=deck,
+            items=items,
+            db=db,
+            model_class=Flashcard,
+        )
+    except Exception as e:
+        logger.error("Failed to save '%s' items: %s", activity_type, e)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to save generated items: {str(e)}",
+        )
+
+    logger.info("Generated %d '%s' items for deck '%s'.", len(items), activity_type, deck_id)
+
+    # Reload and return the updated deck
+    return await _load_deck(deck_id, current_user.id, db)
 
 
 # ─── Deck Source Documents ────────────────────────────────────────────────────

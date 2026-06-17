@@ -226,6 +226,28 @@ export async function reviewFlashcard(flashcardId, quality) {
   });
 }
 
+// ─── Generic Activity Generation ──────────────────────────────────────────────
+
+/**
+ * List all registered activity types.
+ * Response: [{ id, name, icon, description, has_spaced_repetition, ... }]
+ */
+export async function listActivities() {
+  return request("GET", "/study/activities");
+}
+
+/**
+ * Generate items for any registered activity type.
+ *
+ * @param {string} deckId - The deck UUID
+ * @param {string} activityType - "flashcard", "quiz", etc.
+ * @param {object} params - { max_items: number }
+ * @returns {Promise} The updated deck response (with generated items)
+ */
+export async function generateActivity(deckId, activityType, params = {}) {
+  return request("POST", `/study/decks/${deckId}/activities/${activityType}/generate`, params);
+}
+
 // ─── Quiz ─────────────────────────────────────────────────────────────────────
 
 /**

@@ -1,17 +1,42 @@
 import uuid
 from datetime import date, datetime
 
+from typing import Any
+
 from pydantic import BaseModel, Field
 
 from app.schemas.document import DocumentResponse
 
 
+# ─── Activity Types ─────────────────────────────────────────────────────────────
+
+class ActivityTypeResponse(BaseModel):
+    """Metadata about a registered activity type, returned to the frontend."""
+    id: str
+    name: str
+    icon: str
+    description: str
+    has_spaced_repetition: bool
+    max_items_param: str
+    generate_label: str
+    max_items_label: str
+    item_schema: dict
+
+
+class ActivityGenerateRequest(BaseModel):
+    """Generic request body for generating activity items."""
+    max_items: int = 20
+
+
 class FlashcardResponse(BaseModel):
     id: uuid.UUID
     deck_id: uuid.UUID
+    activity_type: str = "flashcard"
     front: str
     back: str
     card_index: int
+    # JSON metadata — type-specific extra fields
+    item_metadata: dict | None = None
     # Legacy field — kept for backward compatibility
     got_it: bool | None
     # SM-2 Spaced Repetition fields

@@ -927,7 +927,79 @@
   right: 0.4rem;
 }
 
-/* ─── Quiz Tab Layout ────────────────────────────────────────────────────────── */
+/* ─── Quiz Panel ──────────────────────────────────────────────────────────────── */
+.quiz-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.quiz-generate {
+  padding: 1.25rem;
+}
+
+.quiz-generate-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.quiz-generate-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.quiz-generate-hint {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+  max-width: 400px;
+}
+
+.quiz-generate-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;
+}
+
+.quiz-generate-count-control {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.quiz-generate-count-label {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.quiz-generate-count-input {
+  width: 60px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  padding: 0.4rem 0.5rem;
+  outline: none;
+  text-align: center;
+}
+
+.quiz-generate-count-input:focus {
+  border-color: var(--color-primary);
+}
+
+.quiz-generate-banner {
+  margin-top: 1rem;
+}
+
+/* Quiz Tab Layout (legacy, for QuizPage) */
 .quiz-tab-layout {
   display: flex;
   height: 100%;
@@ -999,6 +1071,346 @@
 .btn-sm {
   padding: 0.25rem 0.6rem;
   font-size: 0.78rem;
+}
+
+/* ─── Quiz History ───────────────────────────────────────────────────────────── */
+.quiz-history-card {
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.quiz-history-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.quiz-history-empty {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.quiz-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.quiz-history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 0.75rem;
+  background: var(--color-surface-2);
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+}
+
+.quiz-history-item-title {
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+.quiz-history-item-meta {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.quiz-history-item-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.quiz-history-delete-btn {
+  background: none;
+  border: 1px solid var(--color-danger);
+  color: var(--color-danger);
+  padding: 0.25rem 0.6rem;
+  font-size: 0.78rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.quiz-history-delete-btn:hover {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* ─── Cloze Panel ────────────────────────────────────────────────────────────── */
+.cloze-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  padding: 1.5rem;
+  overflow-y: auto;
+  height: 100%;
+}
+
+.cloze-generate {
+  padding: 1.25rem;
+}
+
+.cloze-generate-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cloze-generate-header h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.cloze-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 3rem 2rem;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+
+.cloze-empty-icon {
+  font-size: 3rem;
+  line-height: 1;
+}
+
+.cloze-empty h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.cloze-empty p {
+  font-size: 0.9rem;
+}
+
+.cloze-study-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.cloze-study-bar-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.cloze-count {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.cloze-study-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.cloze-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cloze-preview {
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  transition: border-color var(--transition);
+}
+
+.cloze-preview:hover {
+  border-color: var(--color-primary);
+}
+
+.cloze-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cloze-preview-num {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  flex-shrink: 0;
+  min-width: 28px;
+}
+
+.cloze-preview-sentence {
+  flex: 1;
+  font-size: 0.9rem;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cloze-preview-toggle {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.cloze-preview-answer {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.cloze-preview-answer-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  display: block;
+  margin-bottom: 0.35rem;
+}
+
+.cloze-preview-answer p {
+  font-size: 0.88rem;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+
+.cloze-preview-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 0.4rem;
+}
+
+/* ─── Cloze Review UI ────────────────────────────────────────────────────────── */
+.cloze-review {
+  padding: 1.5rem;
+}
+
+.cloze-review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.cloze-review-progress {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.cloze-review-stats {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.cloze-review-card {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.cloze-sentence {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  background: var(--color-surface-2);
+  border-radius: var(--radius);
+  text-align: center;
+}
+
+.cloze-blank {
+  display: inline-block;
+  min-width: 80px;
+  border-bottom: 3px solid var(--color-primary);
+  color: var(--color-primary);
+  font-weight: 700;
+  margin: 0 0.15rem;
+}
+
+.cloze-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-bottom: 1rem;
+  font-style: italic;
+}
+
+.cloze-answer-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.cloze-answer-input {
+  width: 100%;
+  max-width: 400px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  font-size: 1.05rem;
+  padding: 0.7rem 1rem;
+  outline: none;
+  text-align: center;
+  transition: border-color var(--transition);
+}
+
+.cloze-answer-input:focus {
+  border-color: var(--color-primary);
+}
+
+.cloze-answer-actions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.cloze-feedback {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem;
+}
+
+.cloze-result {
+  font-size: 1.3rem;
+  font-weight: 700;
+  padding: 0.5rem 1.25rem;
+  border-radius: var(--radius);
+}
+
+.cloze-result-correct {
+  color: var(--color-success);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.cloze-result-incorrect {
+  color: var(--color-danger);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.cloze-correct-answer {
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+/* ─── Cloze Session Complete ─────────────────────────────────────────────────── */
+.cloze-session-complete {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 3rem 2rem;
+  text-align: center;
 }
 
 /* ─── Modal (shared) ─────────────────────────────────────────────────────────── */

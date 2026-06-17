@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Integer, String, Table, Text, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -74,9 +74,28 @@ class Flashcard(Base):
     deck_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("decks.id", ondelete="CASCADE"), nullable=False
     )
+
+    # ── Activity type ──────────────────────────────────────────────────────────
+    # Identifies which activity generator created this Flashcard record.
+    # "flashcard" (default), "cloze", "true_false", etc.
+    activity_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="flashcard", server_default="flashcard"
+    )
+
+    # ── Generic content fields ─────────────────────────────────────────────────
+    # "front" and "back" are used as the primary display fields.
+    # For flashcards: front=question, back=answer.
+    # For other types, these may hold the most relevant text, with full details
+    # stored in the JSON ``metadata`` column.
     front: Mapped[str] = mapped_column(Text, nullable=False)
     back: Mapped[str] = mapped_column(Text, nullable=False)
     card_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # JSON metadata — stores type-specific fields that don't fit front/back.
+    # e.g. for cloze: {"blanks": [...], "hints": [...]}
+    # e.g. for true_false: {"explanation": "..."}
+    item_metadata: Mapped[dict | None] = mapped_column("metadata", JSON, nullable=True, default=None)
+
     # Legacy study state (kept for backward compatibility)
     got_it: Mapped[bool | None] = mapped_column(Boolean, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(
