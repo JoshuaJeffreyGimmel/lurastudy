@@ -21,7 +21,9 @@ Upload your study materials (PDF, TXT, Markdown, DOCX, and more) and instantly g
 - **Interactive Study UI** — CSS 3D flip-card animation, Easy / Got It / Again rating, session completion screen
 - **AI Quiz Generation** — Generate multiple-choice quizzes from deck source documents; save and replay quiz attempts with scoring history
 - **Settings UI** — Configure LLM and embedding endpoints live from the browser; test your connection without restarting
-- **Admin Panel** — Manage users and generate/revoke invite tokens
+- **Appearance Customization** — Customize every UI color with live preview; choose from preset themes (Dark/Light) or pick exact hex values; select from multiple font families or type any CSS font; save themes as templates (browser-local), export/import as JSON files
+- **Admin Panel** — Manage users; generate, list, and revoke invite tokens (including used ones)
+- **About Tab** — In-app README viewer renders the project documentation inside the Settings page
 - **Local-first** — Works entirely with Ollama; no data leaves your machine
 
 ---
@@ -140,16 +142,17 @@ lurastudy-dev/
 │       │   ├── FlashCard.jsx           # 3D CSS flip card
 │       │   ├── ProtectedRoute.jsx      # Auth guard for routes
 │       │   └── DocumentPreviewModal.jsx # Chunk viewer modal
-│       └── pages/
-│           ├── LoginPage.jsx           # Login form
-│           ├── RegisterPage.jsx        # Registration form (invite token support)
-│           ├── Dashboard.jsx           # Home — upload + quick stats
-│           ├── DecksPage.jsx           # Deck list
-│           ├── DeckWorkspacePage.jsx   # Chat + flashcard workspace
-│           ├── StudyPage.jsx           # SM-2 flashcard study session
-│           ├── QuizPage.jsx            # Multiple-choice quiz
-│           ├── DocumentsPage.jsx       # Document library + preview
-│           └── SettingsPage.jsx        # LLM/embedding + admin configuration
+│       ├── pages/
+│       │   ├── LoginPage.jsx           # Login form
+│       │   ├── RegisterPage.jsx        # Registration form (invite token support)
+│       │   ├── Dashboard.jsx           # Home — upload + quick stats
+│       │   ├── DecksPage.jsx           # Deck list
+│       │   ├── DeckWorkspacePage.jsx   # Chat + flashcard workspace
+│       │   ├── StudyPage.jsx           # SM-2 flashcard study session
+│       │   ├── QuizPage.jsx            # Multiple-choice quiz
+│       │   ├── DocumentsPage.jsx       # Document library + preview
+│       │   └── SettingsPage.jsx        # LLM/embedding + appearance + admin
+│       └── theme.js                    # Theme engine for appearance customization
 │
 └── postgres/
     └── init.sql                # CREATE EXTENSION IF NOT EXISTS vector
@@ -175,7 +178,7 @@ Full interactive docs available at **http://localhost:8000/docs**
 |--------|---------------------------------|------|--------------------------------------|
 | POST   | `/api/v1/admin/invites`         | ✓    | Generate a new invite token          |
 | GET    | `/api/v1/admin/invites`         | ✓    | List all invite tokens               |
-| DELETE | `/api/v1/admin/invites/{token}` | ✓    | Revoke an unused invite token        |
+| DELETE | `/api/v1/admin/invites/{token}` | ✓    | Revoke an invite token (used or unused) |
 | GET    | `/api/v1/admin/users`           | ✓    | List all registered users            |
 
 ### Documents
@@ -242,8 +245,8 @@ Full interactive docs available at **http://localhost:8000/docs**
 
 | Method | Endpoint                              | Auth | Description                        |
 |--------|---------------------------------------|------|------------------------------------|
-| GET    | `/api/v1/settings`                    | ✓    | Get current LLM/embedding config   |
-| PATCH  | `/api/v1/settings`                    | ✓    | Update settings                    |
+| GET    | `/api/v1/settings`                    | ✓    | Get current settings (AI config + theme) |
+| PATCH  | `/api/v1/settings`                    | ✓    | Update settings (AI config + theme) |
 | POST   | `/api/v1/settings/test-connection`    | ✓    | Test LLM or embedding connectivity |
 
 ---

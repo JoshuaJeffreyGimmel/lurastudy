@@ -14,7 +14,7 @@ import {
   deleteUser,
 } from "../api/client.js";
 import { useAuth } from "../context/AuthContext.jsx";
-import { applyTheme, DEFAULT_THEME, LIGHT_THEME, THEME_LABELS, FONT_OPTIONS } from "../theme.js";
+import { applyTheme, CSS_VAR_MAP, DEFAULT_THEME, LIGHT_THEME, THEME_LABELS, FONT_OPTIONS } from "../theme.js";
 import "./SettingsPage.css";
 
 const OLLAMA_BASE_URL = "http://host.docker.internal:11434/v1";
@@ -463,18 +463,22 @@ function AppearanceTab() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    getSettings()
-      .then((data) => {
-        const t = {};
-        for (const key of COLOR_KEYS) {
-          t[key] = data[key] || DEFAULT_THEME[key];
-        }
-        t.theme_font = data.theme_font || DEFAULT_THEME.theme_font;
-        setTheme(t);
-        applyTheme(t);
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+    // Read currently applied theme from the DOM (set by App.jsx on mount)
+    const root = document.documentElement;
+    const computed = getComputedStyle(root);
+    const t = {};
+    for (const key of COLOR_KEYS) {
+      const cssVar = CSS_VAR_MAP[key];
+      // Prefer inline style (set by applyTheme), fall back to computed (CSS defaults)
+      const value = root.style.getPropertyValue(cssVar) || computed.getPropertyValue(cssVar);
+      t[key] = value || DEFAULT_THEME[key];
+    }
+    const fontInline = root.style.getPropertyValue("--theme-font");
+    const fontComputed = computed.getPropertyValue("--theme-font");
+    const fontDirect = root.style.fontFamily;
+    t.theme_font = fontInline || fontComputed || fontDirect || DEFAULT_THEME.theme_font;
+    setTheme(t);
+    setLoading(false);
 
     // Load saved templates from localStorage
     try {

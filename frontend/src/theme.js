@@ -4,7 +4,7 @@
  */
 
 // Map backend setting keys to CSS custom property names
-const CSS_VAR_MAP = {
+export const CSS_VAR_MAP = {
   theme_bg: "--color-bg",
   theme_surface: "--color-surface",
   theme_surface_2: "--color-surface-2",
