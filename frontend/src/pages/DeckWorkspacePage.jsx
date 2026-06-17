@@ -32,6 +32,12 @@ export default function DeckWorkspacePage() {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("chat");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [deckVersion, setDeckVersion] = useState(0);
+
+  function handleDeckUpdated(updated) {
+    setDeck(updated);
+    setDeckVersion((v) => v + 1);
+  }
 
   const fetchDeck = useCallback(() => {
     return getDeck(deckId)
@@ -73,7 +79,7 @@ export default function DeckWorkspacePage() {
       {/* ─── Sidebar ──────────────────────────────────────────────────────── */}
       <WorkspaceSidebar
         deck={deck}
-        onDeckUpdated={setDeck}
+        onDeckUpdated={handleDeckUpdated}
         collapsed={sidebarCollapsed}
         onToggle={() => setSidebarCollapsed((v) => !v)}
       />
@@ -111,7 +117,7 @@ export default function DeckWorkspacePage() {
           {activeTab === "chat" ? (
             <ChatTab deck={deck} />
           ) : ActivePanel ? (
-            <ActivePanel deck={deck} onDeckUpdated={setDeck} />
+            <ActivePanel deck={deck} onDeckUpdated={handleDeckUpdated} />
           ) : (
             <div className="workspace-error">
               <div className="banner banner-error">Unknown activity type: {activeTab}</div>

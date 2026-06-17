@@ -10,6 +10,7 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateActivity } from "../../api/client.js";
 import { ACTIVITY_METADATA } from "../index.js";
+import GenerateTimer from "../../components/GenerateTimer.jsx";
 
 export default function ClozePanel({ deck, onDeckUpdated }) {
   const navigate = useNavigate();
@@ -165,7 +166,7 @@ export default function ClozePanel({ deck, onDeckUpdated }) {
               {generating ? (
                 <>
                   <span className="spinner" />
-                  Generating…
+                  Generating… <GenerateTimer generating={generating} />
                 </>
               ) : (
                 meta.generate_label

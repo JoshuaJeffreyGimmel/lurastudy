@@ -648,6 +648,13 @@
   border-color: var(--color-primary);
 }
 
+.generate-timer {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+  margin-left: 0.4rem;
+}
+
 .flashcards-empty {
   display: flex;
   flex-direction: column;
@@ -1021,7 +1028,32 @@
   border-left: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* ─── Quiz History ───────────────────────────────────────────────────────────── */
+.quiz-history-card {
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.quiz-history-title {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.quiz-history-empty {
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+.quiz-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
 
 .quiz-history-item {

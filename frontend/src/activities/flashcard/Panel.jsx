@@ -8,6 +8,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { generateActivity, getDueCards } from "../../api/client.js";
 import { ACTIVITY_METADATA } from "../index.js";
+import GenerateTimer from "../../components/GenerateTimer.jsx";
 
 export default function FlashcardPanel({ deck, onDeckUpdated }) {
   const navigate = useNavigate();
@@ -76,7 +77,7 @@ export default function FlashcardPanel({ deck, onDeckUpdated }) {
               title={!hasReadySources ? "Add at least one ready document first" : ""}
             >
               {generating ? (
-                <><span className="spinner" />Generating…</>
+                <><span className="spinner" />Generating… <GenerateTimer generating={generating} /></>
               ) : (
                 meta.generate_label
               )}

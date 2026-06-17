@@ -14,6 +14,7 @@ import {
   saveQuizAttempt,
 } from "../../api/client.js";
 import { ACTIVITY_METADATA } from "../index.js";
+import GenerateTimer from "../../components/GenerateTimer.jsx";
 
 const OPTION_LABELS = ["A", "B", "C", "D"];
 
@@ -37,13 +38,13 @@ export default function QuizPanel({ deck }) {
   const meta = ACTIVITY_METADATA.quiz;
   const hasReadySources = deck.source_documents.some((d) => d.status === "ready");
 
-  // Load quiz history
+  // Load quiz history — re-fetch when flashcards change (new generation)
   useEffect(() => {
     listQuizHistory(deck.id)
       .then((data) => setQuizHistory(data.quizzes))
       .catch((e) => setError(e.message))
       .finally(() => setLoadingHistory(false));
-  }, [deck.id]);
+  }, [deck.id, deck.flashcards.length]);
 
   async function handleGenerate() {
     setGenerating(true);
@@ -257,7 +258,7 @@ function QuizGenerateView({
               title={!hasReadySources ? "Add at least one ready document first" : ""}
             >
               {generating ? (
-                <><span className="spinner" />Generating…</>
+                <><span className="spinner" />Generating… <GenerateTimer generating={generating} /></>
               ) : (
                 meta.generate_label
               )}
