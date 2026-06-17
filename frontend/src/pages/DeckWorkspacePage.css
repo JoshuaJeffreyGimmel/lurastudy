@@ -25,36 +25,114 @@
 /* ─── Sidebar ────────────────────────────────────────────────────────────────── */
 .workspace-sidebar {
   width: 280px;
-  min-width: 240px;
-  max-width: 320px;
+  min-width: 280px;
   background: var(--color-surface);
   border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   flex-shrink: 0;
+  transition: width 0.25s ease, min-width 0.25s ease;
 }
 
-.sidebar-back {
+.workspace-sidebar--collapsed {
+  width: 42px;
+  min-width: 42px;
+}
+
+.sidebar-collapse-btn {
   background: none;
-  border: none;
-  border-bottom: 1px solid var(--color-border);
+  border: 1px solid var(--color-border);
   color: var(--color-text-muted);
-  font-size: 0.85rem;
-  padding: 0.85rem 1.25rem;
-  text-align: left;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  font-size: 1rem;
+  line-height: 1;
   cursor: pointer;
-  transition: color var(--transition), background var(--transition);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color var(--transition), border-color var(--transition), background var(--transition);
 }
 
-.sidebar-back:hover {
-  color: var(--color-text);
+.sidebar-collapse-btn:hover {
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  background: rgba(108, 99, 255, 0.08);
+}
+
+/* ─── Sidebar body (hidden when collapsed) ───────────────────────────────────── */
+.sidebar-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow-y: auto;
+  min-width: 280px; /* prevents content from squishing during transition */
+}
+
+.workspace-sidebar--collapsed .sidebar-body {
+  display: none;
+}
+
+/* ─── Collapsed icon-only body ───────────────────────────────────────────────── */
+.sidebar-collapsed-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.sidebar-collapsed-add {
+  width: 28px;
+  height: 28px;
+  margin-bottom: 0.25rem;
+}
+
+.sidebar-collapsed-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: default;
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: background var(--transition);
+}
+
+.sidebar-collapsed-icon:hover {
   background: var(--color-surface-2);
 }
 
+.workspace-sidebar--collapsed .sidebar-title-section {
+  padding: 0.5rem;
+  display: flex;
+  justify-content: center;
+}
+
+.workspace-sidebar--collapsed .sidebar-title-row {
+  justify-content: center;
+}
+
 .sidebar-title-section {
-  padding: 1.25rem 1.25rem 0.75rem;
+  padding: 0.75rem 1rem 0.75rem 1.25rem;
   border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.sidebar-title-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.sidebar-title-row .sidebar-title,
+.sidebar-title-row .sidebar-title-edit {
+  flex: 1;
+  min-width: 0;
 }
 
 .sidebar-title {

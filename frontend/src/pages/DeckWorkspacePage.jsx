@@ -24,6 +24,7 @@ export default function DeckWorkspacePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState("chat"); // "chat" | "flashcards" | "quiz"
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const fetchDeck = useCallback(() => {
     return getDeck(deckId)
@@ -60,7 +61,8 @@ export default function DeckWorkspacePage() {
       <WorkspaceSidebar
         deck={deck}
         onDeckUpdated={setDeck}
-        onBack={() => navigate("/decks")}
+        collapsed={sidebarCollapsed}
+        onToggle={() => setSidebarCollapsed((v) => !v)}
       />
 
       {/* ─── Main Panel ───────────────────────────────────────────────────── */}
@@ -107,7 +109,7 @@ export default function DeckWorkspacePage() {
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
-function WorkspaceSidebar({ deck, onDeckUpdated, onBack }) {
+function WorkspaceSidebar({ deck, onDeckUpdated, collapsed, onToggle }) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(deck.title);
   const [showAddSource, setShowAddSource] = useState(false);
@@ -158,46 +160,75 @@ function WorkspaceSidebar({ deck, onDeckUpdated, onBack }) {
   }
 
   return (
-    <aside className="workspace-sidebar">
-      {/* Back button */}
-      <button className="sidebar-back" onClick={onBack}>
-        ← Decks
-      </button>
-
-      {/* Deck title */}
+    <aside className={`workspace-sidebar${collapsed ? " workspace-sidebar--collapsed" : ""}`}>
+      {/* Title section with collapse toggle — always visible */}
       <div className="sidebar-title-section">
-        {editingTitle ? (
-          <div className="sidebar-title-edit">
-            <input
-              ref={titleInputRef}
-              className="sidebar-title-input"
-              value={titleValue}
-              onChange={(e) => setTitleValue(e.target.value)}
-              onBlur={handleTitleSave}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleTitleSave();
-                if (e.key === "Escape") {
-                  setEditingTitle(false);
-                  setTitleValue(deck.title);
-                }
-              }}
-              autoFocus
-            />
-          </div>
-        ) : (
-          <h2
-            className="sidebar-title"
-            onClick={() => setEditingTitle(true)}
-            title="Click to rename"
+        <div className="sidebar-title-row">
+          {!collapsed && (editingTitle ? (
+            <div className="sidebar-title-edit">
+              <input
+                ref={titleInputRef}
+                className="sidebar-title-input"
+                value={titleValue}
+                onChange={(e) => setTitleValue(e.target.value)}
+                onBlur={handleTitleSave}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleTitleSave();
+                  if (e.key === "Escape") {
+                    setEditingTitle(false);
+                    setTitleValue(deck.title);
+                  }
+                }}
+                autoFocus
+              />
+            </div>
+          ) : (
+            <h2
+              className="sidebar-title"
+              onClick={() => setEditingTitle(true)}
+              title="Click to rename"
+            >
+              {deck.title}
+              <span className="sidebar-title-edit-icon">✏</span>
+            </h2>
+          ))}
+          <button
+            className="sidebar-collapse-btn"
+            onClick={onToggle}
+            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {deck.title}
-            <span className="sidebar-title-edit-icon">✏</span>
-          </h2>
-        )}
-        {deck.description && (
+            {collapsed ? "›" : "‹"}
+          </button>
+        </div>
+        {!collapsed && deck.description && (
           <p className="sidebar-description">{deck.description}</p>
         )}
       </div>
+
+      {/* Collapsed icon-only view */}
+      {collapsed && (
+        <div className="sidebar-collapsed-body">
+          <button
+            className="sidebar-add-btn sidebar-collapsed-add"
+            onClick={() => setShowAddSource(true)}
+            title="Add source"
+          >
+            +
+          </button>
+          {deck.source_documents.map((doc) => (
+            <span
+              key={doc.id}
+              className="sidebar-collapsed-icon"
+              title={doc.original_filename}
+            >
+              {doc.file_type === "pdf" ? "📕" : doc.file_type === "md" ? "📝" : "📄"}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Sidebar body — hidden when collapsed */}
+      <div className="sidebar-body">
 
       {error && (
         <div className="banner banner-error sidebar-error" onClick={() => setError(null)}>
@@ -272,6 +303,8 @@ function WorkspaceSidebar({ deck, onDeckUpdated, onBack }) {
           onUpload={handleUploadAndAdd}
         />
       )}
+
+      </div>{/* end sidebar-body */}
     </aside>
   );
 }

@@ -9,14 +9,57 @@ import "./SettingsPage.css";
 const OLLAMA_BASE_URL = "http://host.docker.internal:11434/v1";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 
+const TABS = [
+  { id: "ai-connections", label: "AI Connections", icon: "🔌" },
+  { id: "appearance",     label: "Appearance",     icon: "🎨" },
+  { id: "about",          label: "About",           icon: "ℹ️" },
+];
+
 export default function SettingsPage() {
+  const [activeTab, setActiveTab] = useState("ai-connections");
+
+  return (
+    <div className="settings-page">
+      <div className="settings-header">
+        <h1>⚙ Settings</h1>
+      </div>
+
+      <div className="settings-layout">
+        {/* ── Vertical tab list ── */}
+        <nav className="settings-tabs">
+          {TABS.map((tab) => (
+            <button
+              key={tab.id}
+              className={`settings-tab-btn${activeTab === tab.id ? " active" : ""}`}
+              onClick={() => setActiveTab(tab.id)}
+            >
+              <span className="tab-icon">{tab.icon}</span>
+              <span className="tab-label">{tab.label}</span>
+            </button>
+          ))}
+        </nav>
+
+        {/* ── Tab content panel ── */}
+        <div className="settings-content">
+          {activeTab === "ai-connections" && <AiConnectionsTab />}
+          {activeTab === "appearance"     && <PlaceholderTab title="Appearance"     icon="🎨" description="Theme and display customization options will be available here in a future update." />}
+          {activeTab === "about"          && <PlaceholderTab title="About"           icon="ℹ️"  description="App version, changelog, and license information will be available here in a future update." />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   AI Connections Tab
+───────────────────────────────────────────────────────────────────────────── */
+function AiConnectionsTab() {
   const [settings, setSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [successMsg, setSuccessMsg] = useState(null);
 
-  // Local form state
   const [llmBaseUrl, setLlmBaseUrl] = useState("");
   const [llmApiKey, setLlmApiKey] = useState("");
   const [llmModel, setLlmModel] = useState("");
@@ -26,7 +69,6 @@ export default function SettingsPage() {
   const [embModel, setEmbModel] = useState("");
   const [embDimensions, setEmbDimensions] = useState("");
 
-  // Test connection state
   const [llmTestResult, setLlmTestResult] = useState(null);
   const [embTestResult, setEmbTestResult] = useState(null);
   const [testingLlm, setTestingLlm] = useState(false);
@@ -137,17 +179,17 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="settings-page">
-        <p><span className="spinner" />Loading settings…</p>
+      <div className="tab-loading">
+        <span className="spinner" />Loading settings…
       </div>
     );
   }
 
   return (
-    <div className="settings-page">
-      <div className="settings-header">
-        <h1>⚙ Settings</h1>
-        <p className="subtitle">
+    <>
+      <div className="tab-title-row">
+        <h2>🔌 AI Connections</h2>
+        <p className="tab-desc">
           Configure the AI models used for flashcard generation and document embedding.
           Changes take effect immediately — no restart needed.
         </p>
@@ -170,7 +212,7 @@ export default function SettingsPage() {
         <section className="settings-section card">
           <div className="section-header">
             <div>
-              <h2>🤖 Inference Model</h2>
+              <h3>🤖 Inference Model</h3>
               <p className="section-desc">Used to generate flashcards from your documents.</p>
             </div>
             <div className="preset-buttons">
@@ -244,9 +286,7 @@ export default function SettingsPage() {
             >
               {testingLlm ? <><span className="spinner" />Testing…</> : "🔌 Test Connection"}
             </button>
-            {llmTestResult && (
-              <TestResult result={llmTestResult} />
-            )}
+            {llmTestResult && <TestResult result={llmTestResult} />}
           </div>
         </section>
 
@@ -254,7 +294,7 @@ export default function SettingsPage() {
         <section className="settings-section card">
           <div className="section-header">
             <div>
-              <h2>🔢 Embedding Model</h2>
+              <h3>🔢 Embedding Model</h3>
               <p className="section-desc">
                 Used to convert document text into vectors for semantic search.
                 <strong> Note:</strong> changing this requires re-uploading existing documents.
@@ -343,9 +383,7 @@ export default function SettingsPage() {
             >
               {testingEmb ? <><span className="spinner" />Testing…</> : "🔌 Test Connection"}
             </button>
-            {embTestResult && (
-              <TestResult result={embTestResult} />
-            )}
+            {embTestResult && <TestResult result={embTestResult} />}
           </div>
         </section>
 
@@ -356,10 +394,32 @@ export default function SettingsPage() {
           </button>
         </div>
       </form>
-    </div>
+    </>
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   Placeholder Tab
+───────────────────────────────────────────────────────────────────────────── */
+function PlaceholderTab({ title, icon, description }) {
+  return (
+    <>
+      <div className="tab-title-row">
+        <h2>{icon} {title}</h2>
+        <p className="tab-desc">{description}</p>
+      </div>
+      <div className="placeholder-card card">
+        <span className="placeholder-icon">{icon}</span>
+        <p className="placeholder-label">Coming soon</p>
+        <p className="placeholder-sub">This section is under construction.</p>
+      </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Test Result
+───────────────────────────────────────────────────────────────────────────── */
 function TestResult({ result }) {
   return (
     <div className={`test-result ${result.success ? "test-success" : "test-failure"}`}>
