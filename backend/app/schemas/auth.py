@@ -36,6 +36,7 @@ class UserResponse(BaseModel):
     username: str
     email: Optional[str]
     is_admin: bool
+    is_blocked: bool
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -61,7 +62,14 @@ class InviteListResponse(BaseModel):
     total: int
 
 
-# ─── Admin user list ───────────────────────────────────────────────────────────
+# ─── Admin user management ────────────────────────────────────────────────────
+
+class AdminUpdateUserRequest(BaseModel):
+    """Fields an admin is allowed to update on another user."""
+    email: Optional[str] = Field(None, max_length=255)
+    is_admin: Optional[bool] = None
+    is_blocked: Optional[bool] = None
+
 
 class UserListResponse(BaseModel):
     users: list[UserResponse]

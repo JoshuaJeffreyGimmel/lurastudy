@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { NavLink, Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
+import { applyTheme } from "./theme.js";
+import { getSettings } from "./api/client.js";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import DecksPage from "./pages/DecksPage.jsx";
@@ -15,6 +17,17 @@ import StudyPage from "./pages/StudyPage.jsx";
 function AppShell() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Load the user's theme on app mount
+  useEffect(() => {
+    if (user) {
+      getSettings()
+        .then((settings) => applyTheme(settings))
+        .catch(() => {
+          // Silently ignore — theme will remain at defaults
+        });
+    }
+  }, [user]);
 
   function handleLogout() {
     logout();

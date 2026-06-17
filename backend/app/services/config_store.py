@@ -24,6 +24,20 @@ EMBEDDING_API_KEY = "embedding_api_key"
 EMBEDDING_MODEL = "embedding_model"
 EMBEDDING_DIMENSIONS = "embedding_dimensions"
 
+# Theme keys
+THEME_BG = "theme_bg"
+THEME_SURFACE = "theme_surface"
+THEME_SURFACE_2 = "theme_surface_2"
+THEME_BORDER = "theme_border"
+THEME_PRIMARY = "theme_primary"
+THEME_PRIMARY_HOVER = "theme_primary_hover"
+THEME_SUCCESS = "theme_success"
+THEME_WARNING = "theme_warning"
+THEME_DANGER = "theme_danger"
+THEME_TEXT = "theme_text"
+THEME_TEXT_MUTED = "theme_text_muted"
+THEME_FONT = "theme_font"
+
 # Ordered list of all setting keys (used for bulk read/write)
 ALL_KEYS = [
     LLM_BASE_URL,
@@ -33,6 +47,18 @@ ALL_KEYS = [
     EMBEDDING_API_KEY,
     EMBEDDING_MODEL,
     EMBEDDING_DIMENSIONS,
+    THEME_BG,
+    THEME_SURFACE,
+    THEME_SURFACE_2,
+    THEME_BORDER,
+    THEME_PRIMARY,
+    THEME_PRIMARY_HOVER,
+    THEME_SUCCESS,
+    THEME_WARNING,
+    THEME_DANGER,
+    THEME_TEXT,
+    THEME_TEXT_MUTED,
+    THEME_FONT,
 ]
 
 # Default values from .env / pydantic settings
@@ -44,6 +70,19 @@ DEFAULTS: dict[str, str] = {
     EMBEDDING_API_KEY: env_settings.embedding_api_key,
     EMBEDDING_MODEL: env_settings.embedding_model,
     EMBEDDING_DIMENSIONS: str(env_settings.embedding_dimensions),
+    # Theme defaults matching the dark theme in index.css
+    THEME_BG: "#0f1117",
+    THEME_SURFACE: "#1a1d27",
+    THEME_SURFACE_2: "#22263a",
+    THEME_BORDER: "#2e3250",
+    THEME_PRIMARY: "#6c63ff",
+    THEME_PRIMARY_HOVER: "#5a52e0",
+    THEME_SUCCESS: "#22c55e",
+    THEME_WARNING: "#f59e0b",
+    THEME_DANGER: "#ef4444",
+    THEME_TEXT: "#e2e8f0",
+    THEME_TEXT_MUTED: "#8892a4",
+    THEME_FONT: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
 }
 
 

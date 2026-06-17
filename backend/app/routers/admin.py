@@ -8,13 +8,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.dependencies import get_current_admin
 from app.models.user import InviteToken, User
-from app.schemas.auth import InviteListResponse, InviteTokenResponse, UserListResponse, UserResponse
+from app.schemas.auth import AdminUpdateUserRequest, InviteListResponse, InviteTokenResponse, UserListResponse, UserResponse
 
 logger = logging.getLogger(__name__)
 
@@ -87,16 +87,11 @@ async def revoke_invite(
     current_admin: User = Depends(get_current_admin),
     db: AsyncSession = Depends(get_db),
 ):
-    """Revoke (delete) an unused invite token. Admin only."""
+    """Revoke (delete) an invite token. Admin only."""
     result = await db.execute(select(InviteToken).where(InviteToken.token == token))
     invite = result.scalar_one_or_none()
     if not invite:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invite token not found.")
-    if invite.used_at is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot revoke an already-used invite token.",
-        )
     await db.delete(invite)
     logger.info("Admin %s revoked invite token %s", current_admin.username, token)
 
@@ -112,3 +107,77 @@ async def list_users(
     result = await db.execute(select(User).order_by(User.created_at.asc()))
     users = result.scalars().all()
     return UserListResponse(users=list(users), total=len(users))
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: uuid.UUID,
+    body: AdminUpdateUserRequest,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update a user's email or admin status. Admin only."""
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    # Prevent self-demotion
+    if user.id == current_admin.id and body.is_admin is False:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot remove your own admin privileges.",
+        )
+
+    # Prevent self-block
+    if user.id == current_admin.id and body.is_blocked is True:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot block yourself.",
+        )
+
+    # Prevent removing the last admin
+    if body.is_admin is False and user.is_admin:
+        admin_count = await db.scalar(
+            select(func.count()).where(User.is_admin.is_(True))
+        )
+        if admin_count and admin_count <= 1:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cannot remove the last admin. Promote another user first.",
+            )
+
+    if body.email is not None:
+        user.email = body.email
+    if body.is_admin is not None:
+        user.is_admin = body.is_admin
+    if body.is_blocked is not None:
+        user.is_blocked = body.is_blocked
+
+    await db.flush()
+    await db.refresh(user)
+    logger.info("Admin %s updated user %s", current_admin.username, user.username)
+    return user
+
+
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(
+    user_id: uuid.UUID,
+    current_admin: User = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Delete a user and all their data. Admin only."""
+    # Prevent self-deletion
+    if user_id == current_admin.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You cannot delete your own account.",
+        )
+
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found.")
+
+    await db.delete(user)
+    logger.info("Admin %s deleted user %s", current_admin.username, user.username)

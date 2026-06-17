@@ -25,6 +25,19 @@ class SettingsUpdate(BaseModel):
     embedding_api_key: str | None = None
     embedding_model: str | None = None
     embedding_dimensions: int | None = None
+    # Theme fields
+    theme_bg: str | None = None
+    theme_surface: str | None = None
+    theme_surface_2: str | None = None
+    theme_border: str | None = None
+    theme_primary: str | None = None
+    theme_primary_hover: str | None = None
+    theme_success: str | None = None
+    theme_warning: str | None = None
+    theme_danger: str | None = None
+    theme_text: str | None = None
+    theme_text_muted: str | None = None
+    theme_font: str | None = None
 
 
 class SettingsResponse(BaseModel):
@@ -35,6 +48,19 @@ class SettingsResponse(BaseModel):
     embedding_api_key: str
     embedding_model: str
     embedding_dimensions: int
+    # Theme fields
+    theme_bg: str
+    theme_surface: str
+    theme_surface_2: str
+    theme_border: str
+    theme_primary: str
+    theme_primary_hover: str
+    theme_success: str
+    theme_warning: str
+    theme_danger: str
+    theme_text: str
+    theme_text_muted: str
+    theme_font: str
 
 
 class TestConnectionRequest(BaseModel):

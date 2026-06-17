@@ -114,6 +114,22 @@ export async function listUsers() {
   return request("GET", "/admin/users");
 }
 
+export async function updateUser(userId, data) {
+  return request("PATCH", `/admin/users/${userId}`, data);
+}
+
+export async function blockUser(userId) {
+  return request("PATCH", `/admin/users/${userId}`, { is_blocked: true });
+}
+
+export async function unblockUser(userId) {
+  return request("PATCH", `/admin/users/${userId}`, { is_blocked: false });
+}
+
+export async function deleteUser(userId) {
+  return request("DELETE", `/admin/users/${userId}`);
+}
+
 // ─── Documents ────────────────────────────────────────────────────────────────
 
 export async function uploadDocument(file) {

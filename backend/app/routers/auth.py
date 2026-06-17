@@ -128,6 +128,12 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if user.is_blocked:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Your account has been suspended.",
+        )
+
     token = create_access_token(
         user_id=user.id,
         username=user.username,
