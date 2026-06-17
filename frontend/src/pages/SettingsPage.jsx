@@ -3,19 +3,27 @@ import {
   getSettings,
   updateSettings,
   testConnection,
+  createInvite,
+  listInvites,
+  revokeInvite,
+  listUsers,
 } from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import "./SettingsPage.css";
 
 const OLLAMA_BASE_URL = "http://host.docker.internal:11434/v1";
 const OPENAI_BASE_URL = "https://api.openai.com/v1";
 
-const TABS = [
-  { id: "ai-connections", label: "AI Connections", icon: "🔌" },
-  { id: "appearance",     label: "Appearance",     icon: "🎨" },
-  { id: "about",          label: "About",           icon: "ℹ️" },
-];
-
 export default function SettingsPage() {
+  const { user } = useAuth();
+
+  const TABS = [
+    { id: "ai-connections", label: "AI Connections", icon: "🔌" },
+    ...(user?.is_admin ? [{ id: "admin", label: "Admin", icon: "🛡" }] : []),
+    { id: "appearance",     label: "Appearance",     icon: "🎨" },
+    { id: "about",          label: "About",           icon: "ℹ️" },
+  ];
+
   const [activeTab, setActiveTab] = useState("ai-connections");
 
   return (
@@ -42,6 +50,7 @@ export default function SettingsPage() {
         {/* ── Tab content panel ── */}
         <div className="settings-content">
           {activeTab === "ai-connections" && <AiConnectionsTab />}
+          {activeTab === "admin"          && <AdminTab />}
           {activeTab === "appearance"     && <PlaceholderTab title="Appearance"     icon="🎨" description="Theme and display customization options will be available here in a future update." />}
           {activeTab === "about"          && <PlaceholderTab title="About"           icon="ℹ️"  description="App version, changelog, and license information will be available here in a future update." />}
         </div>
@@ -413,6 +422,186 @@ function PlaceholderTab({ title, icon, description }) {
         <p className="placeholder-label">Coming soon</p>
         <p className="placeholder-sub">This section is under construction.</p>
       </div>
+    </>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Admin Tab — invite management + user list
+───────────────────────────────────────────────────────────────────────────── */
+function AdminTab() {
+  const [invites, setInvites] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [loadingInvites, setLoadingInvites] = useState(true);
+  const [loadingUsers, setLoadingUsers] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [expiresInDays, setExpiresInDays] = useState("");
+  const [error, setError] = useState(null);
+  const [copiedToken, setCopiedToken] = useState(null);
+
+  useEffect(() => {
+    listInvites()
+      .then((data) => setInvites(data.invites || []))
+      .catch((e) => setError(e.message))
+      .finally(() => setLoadingInvites(false));
+    listUsers()
+      .then((data) => setUsers(data.users || []))
+      .catch(() => {})
+      .finally(() => setLoadingUsers(false));
+  }, []);
+
+  async function handleCreateInvite() {
+    setCreating(true);
+    setError(null);
+    try {
+      const days = expiresInDays ? parseInt(expiresInDays, 10) : undefined;
+      const invite = await createInvite(days);
+      setInvites((prev) => [invite, ...prev]);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleRevoke(token) {
+    try {
+      await revokeInvite(token);
+      setInvites((prev) => prev.filter((i) => i.token !== token));
+    } catch (e) {
+      setError(e.message);
+    }
+  }
+
+  function buildInviteUrl(token) {
+    return `${window.location.origin}/register?invite=${token}`;
+  }
+
+  async function handleCopy(token) {
+    try {
+      await navigator.clipboard.writeText(buildInviteUrl(token));
+      setCopiedToken(token);
+      setTimeout(() => setCopiedToken(null), 2000);
+    } catch {
+      // fallback: select text
+    }
+  }
+
+  return (
+    <>
+      <div className="tab-title-row">
+        <h2>🛡 Admin</h2>
+        <p className="tab-desc">
+          Manage invite tokens and view registered users.
+        </p>
+      </div>
+
+      {error && (
+        <div className="banner banner-error" onClick={() => setError(null)} style={{ cursor: "pointer" }}>
+          ⚠ {error} <span style={{ float: "right", opacity: 0.6 }}>✕</span>
+        </div>
+      )}
+
+      {/* ── Create Invite ── */}
+      <section className="settings-section card">
+        <h3>🔗 Create Invite Link</h3>
+        <p className="section-desc">
+          Generate a one-time invite link to share with a new user.
+          The link opens the registration page with the token pre-filled.
+        </p>
+        <div className="admin-create-row">
+          <div className="form-group" style={{ flex: 1 }}>
+            <label htmlFor="expires-days">Expires in (days)</label>
+            <input
+              id="expires-days"
+              type="number"
+              className="form-input"
+              placeholder="Leave blank for no expiry"
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(e.target.value)}
+              min="1"
+              max="365"
+            />
+          </div>
+          <button
+            className="btn-primary"
+            onClick={handleCreateInvite}
+            disabled={creating}
+            style={{ alignSelf: "flex-end" }}
+          >
+            {creating ? <><span className="spinner" />Creating…</> : "＋ Create Invite"}
+          </button>
+        </div>
+      </section>
+
+      {/* ── Invite List ── */}
+      <section className="settings-section card">
+        <h3>📋 Invite Tokens</h3>
+        {loadingInvites ? (
+          <div className="tab-loading"><span className="spinner" />Loading…</div>
+        ) : invites.length === 0 ? (
+          <p className="empty-state-text">No invite tokens yet.</p>
+        ) : (
+          <div className="admin-invite-list">
+            {invites.map((inv) => (
+              <div key={inv.token} className={`admin-invite-row${inv.is_used ? " used" : ""}`}>
+                <div className="invite-info">
+                  <code className="invite-token">{inv.token}</code>
+                  <span className={`badge ${inv.is_used ? "badge-error" : "badge-ready"}`}>
+                    {inv.is_used ? "Used" : "Available"}
+                  </span>
+                  {inv.expires_at && (
+                    <span className="invite-meta">
+                      Expires {new Date(inv.expires_at).toLocaleDateString()}
+                    </span>
+                  )}
+                </div>
+                <div className="invite-actions">
+                  {!inv.is_used && (
+                    <>
+                      <button
+                        className="btn-secondary btn-sm"
+                        onClick={() => handleCopy(inv.token)}
+                      >
+                        {copiedToken === inv.token ? "✓ Copied!" : "📋 Copy Link"}
+                      </button>
+                      <button
+                        className="btn-danger btn-sm"
+                        onClick={() => handleRevoke(inv.token)}
+                      >
+                        Revoke
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* ── User List ── */}
+      <section className="settings-section card">
+        <h3>👥 Registered Users</h3>
+        {loadingUsers ? (
+          <div className="tab-loading"><span className="spinner" />Loading…</div>
+        ) : users.length === 0 ? (
+          <p className="empty-state-text">No users found.</p>
+        ) : (
+          <div className="admin-user-list">
+            {users.map((u) => (
+              <div key={u.id} className="admin-user-row">
+                <span className="user-name">{u.username}</span>
+                {u.email && <span className="user-email">{u.email}</span>}
+                {u.is_admin && <span className="badge badge-processing">Admin</span>}
+                <span className="user-joined">
+                  Joined {new Date(u.created_at).toLocaleDateString()}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </>
   );
 }

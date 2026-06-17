@@ -22,5 +22,9 @@ class Settings(BaseSettings):
     upload_dir: str = "/app/uploads"
     max_file_size_mb: int = 50
 
+    # Auth / JWT
+    secret_key: str = "change-me-to-a-long-random-secret-key-in-production"
+    access_token_expire_minutes: int = 10080  # 7 days
+
 
 settings = Settings()

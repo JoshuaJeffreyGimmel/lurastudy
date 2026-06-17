@@ -1,6 +1,7 @@
 """
 History router.
 Handles chat conversations (CRUD + messaging) and quiz save/history.
+All endpoints require authentication; data is scoped to the current user via deck ownership.
 """
 import logging
 import uuid
@@ -11,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.history import ChatConversation, ChatMessage, Quiz, QuizAttempt
 from app.models.study import Deck
+from app.models.user import User
 from app.schemas.history import (
     ChatConversationCreate,
     ChatConversationResponse,
@@ -43,10 +46,10 @@ router = APIRouter(prefix="/history", tags=["history"])
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-async def _get_deck_or_404(deck_id: uuid.UUID, db: AsyncSession) -> Deck:
+async def _get_deck_or_404(deck_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> Deck:
     result = await db.execute(
         select(Deck)
-        .where(Deck.id == deck_id)
+        .where(Deck.id == deck_id, Deck.user_id == user_id)
         .options(selectinload(Deck.source_documents))
     )
     deck = result.scalar_one_or_none()
@@ -55,10 +58,12 @@ async def _get_deck_or_404(deck_id: uuid.UUID, db: AsyncSession) -> Deck:
     return deck
 
 
-async def _load_conversation(conv_id: uuid.UUID, db: AsyncSession) -> ChatConversation:
+async def _load_conversation(conv_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> ChatConversation:
+    """Load a conversation, verifying ownership via the deck."""
     result = await db.execute(
         select(ChatConversation)
-        .where(ChatConversation.id == conv_id)
+        .join(Deck, ChatConversation.deck_id == Deck.id)
+        .where(ChatConversation.id == conv_id, Deck.user_id == user_id)
         .options(selectinload(ChatConversation.messages))
     )
     conv = result.scalar_one_or_none()
@@ -73,9 +78,10 @@ async def _load_conversation(conv_id: uuid.UUID, db: AsyncSession) -> ChatConver
 async def list_conversations(
     deck_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List all chat conversations for a deck, newest first."""
-    await _get_deck_or_404(deck_id, db)
+    await _get_deck_or_404(deck_id, current_user.id, db)
 
     result = await db.execute(
         select(ChatConversation)
@@ -108,37 +114,35 @@ async def create_conversation(
     deck_id: uuid.UUID,
     payload: ChatConversationCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new empty chat conversation for a deck."""
-    await _get_deck_or_404(deck_id, db)
+    await _get_deck_or_404(deck_id, current_user.id, db)
 
     conv = ChatConversation(deck_id=deck_id, title=payload.title)
     db.add(conv)
     await db.flush()
-    return await _load_conversation(conv.id, db)
+    return await _load_conversation(conv.id, current_user.id, db)
 
 
 @router.get("/conversations/{conv_id}", response_model=ChatConversationResponse)
 async def get_conversation(
     conv_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Load a conversation with all its messages."""
-    return await _load_conversation(conv_id, db)
+    return await _load_conversation(conv_id, current_user.id, db)
 
 
 @router.delete("/conversations/{conv_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_conversation(
     conv_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a conversation and all its messages."""
-    result = await db.execute(
-        select(ChatConversation).where(ChatConversation.id == conv_id)
-    )
-    conv = result.scalar_one_or_none()
-    if not conv:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Conversation not found")
+    conv = await _load_conversation(conv_id, current_user.id, db)
     await db.delete(conv)
 
 
@@ -147,12 +151,13 @@ async def rename_conversation(
     conv_id: uuid.UUID,
     payload: ChatConversationCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Rename a conversation."""
-    conv = await _load_conversation(conv_id, db)
+    conv = await _load_conversation(conv_id, current_user.id, db)
     conv.title = payload.title
     await db.flush()
-    return await _load_conversation(conv_id, db)
+    return await _load_conversation(conv_id, current_user.id, db)
 
 
 @router.post("/conversations/{conv_id}/chat", response_model=ChatMessageResponse)
@@ -160,17 +165,15 @@ async def chat_in_conversation(
     conv_id: uuid.UUID,
     request: ConversationChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Send a message in a conversation. Saves both the user message and the AI reply.
-    Returns the AI reply message.
-    """
-    conv = await _load_conversation(conv_id, db)
+    """Send a message in a conversation. Saves both the user message and the AI reply."""
+    conv = await _load_conversation(conv_id, current_user.id, db)
 
     # Load the deck to get source documents
     deck_result = await db.execute(
         select(Deck)
-        .where(Deck.id == conv.deck_id)
+        .where(Deck.id == conv.deck_id, Deck.user_id == current_user.id)
         .options(selectinload(Deck.source_documents))
     )
     deck = deck_result.scalar_one_or_none()
@@ -184,15 +187,13 @@ async def chat_in_conversation(
             detail="No ready documents found in this deck.",
         )
 
-    # Load LLM config
-    cfg = await get_all_settings(db)
+    cfg = await get_all_settings(db, current_user.id)
     llm_base_url = cfg[LLM_BASE_URL]
     llm_api_key = cfg[LLM_API_KEY]
     llm_model = cfg[LLM_MODEL]
 
     doc_ids = [d.id for d in ready_docs]
 
-    # Retrieve relevant chunks
     try:
         context_chunks = await retrieve_relevant_chunks_multi(
             db=db,
@@ -210,10 +211,8 @@ async def chat_in_conversation(
             detail="No text content found in the deck's source documents.",
         )
 
-    # Build history from existing messages
     history = [{"role": m.role, "content": m.content} for m in conv.messages]
 
-    # Call LLM
     try:
         reply_text = await chat_with_sources(
             context_chunks=context_chunks,
@@ -230,7 +229,6 @@ async def chat_in_conversation(
             detail="Failed to get a response from the LLM. Please check your settings.",
         )
 
-    # Save user message
     user_msg = ChatMessage(
         conversation_id=conv_id,
         role="user",
@@ -238,7 +236,6 @@ async def chat_in_conversation(
     )
     db.add(user_msg)
 
-    # Save assistant reply
     assistant_msg = ChatMessage(
         conversation_id=conv_id,
         role="assistant",
@@ -246,9 +243,7 @@ async def chat_in_conversation(
     )
     db.add(assistant_msg)
 
-    # Auto-update conversation title from first user message
     if len(conv.messages) == 0 and conv.title == "New Chat":
-        # Use first ~60 chars of the first message as title
         conv.title = request.message[:60] + ("…" if len(request.message) > 60 else "")
 
     await db.flush()
@@ -262,9 +257,10 @@ async def chat_in_conversation(
 async def list_quizzes(
     deck_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """List all saved quizzes for a deck, newest first."""
-    await _get_deck_or_404(deck_id, db)
+    await _get_deck_or_404(deck_id, current_user.id, db)
 
     result = await db.execute(
         select(Quiz)
@@ -307,9 +303,10 @@ async def save_quiz(
     deck_id: uuid.UUID,
     payload: SaveQuizRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Save a newly generated quiz to the database."""
-    await _get_deck_or_404(deck_id, db)
+    await _get_deck_or_404(deck_id, current_user.id, db)
 
     quiz = Quiz(
         deck_id=deck_id,
@@ -332,11 +329,13 @@ async def save_quiz(
 async def get_quiz(
     quiz_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Load a saved quiz with all its attempts."""
+    """Load a saved quiz with all its attempts (ownership verified via deck)."""
     result = await db.execute(
         select(Quiz)
-        .where(Quiz.id == quiz_id)
+        .join(Deck, Quiz.deck_id == Deck.id)
+        .where(Quiz.id == quiz_id, Deck.user_id == current_user.id)
         .options(selectinload(Quiz.attempts))
     )
     quiz = result.scalar_one_or_none()
@@ -349,9 +348,14 @@ async def get_quiz(
 async def delete_quiz(
     quiz_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a saved quiz and all its attempts."""
-    result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    result = await db.execute(
+        select(Quiz)
+        .join(Deck, Quiz.deck_id == Deck.id)
+        .where(Quiz.id == quiz_id, Deck.user_id == current_user.id)
+    )
     quiz = result.scalar_one_or_none()
     if not quiz:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")
@@ -367,9 +371,14 @@ async def save_attempt(
     quiz_id: uuid.UUID,
     payload: SaveAttemptRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Save a completed quiz attempt."""
-    result = await db.execute(select(Quiz).where(Quiz.id == quiz_id))
+    result = await db.execute(
+        select(Quiz)
+        .join(Deck, Quiz.deck_id == Deck.id)
+        .where(Quiz.id == quiz_id, Deck.user_id == current_user.id)
+    )
     quiz = result.scalar_one_or_none()
     if not quiz:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Quiz not found")

@@ -1,6 +1,7 @@
 """
 Knowledge Base router.
 Handles CRUD for knowledge bases (named collections of documents).
+All endpoints require authentication; knowledge bases are scoped to the current user.
 """
 import logging
 import uuid
@@ -11,8 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.document import Document
 from app.models.knowledge_base import KnowledgeBase
+from app.models.user import User
 from app.schemas.knowledge_base import (
     KnowledgeBaseCreate,
     KnowledgeBaseListResponse,
@@ -30,14 +33,18 @@ router = APIRouter(prefix="/knowledge-bases", tags=["knowledge-bases"])
 async def create_knowledge_base(
     payload: KnowledgeBaseCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new knowledge base, optionally with an initial set of documents."""
-    kb = KnowledgeBase(name=payload.name)
+    kb = KnowledgeBase(user_id=current_user.id, name=payload.name)
     db.add(kb)
     await db.flush()
 
     if payload.document_ids:
-        stmt = select(Document).where(Document.id.in_(payload.document_ids))
+        stmt = select(Document).where(
+            Document.id.in_(payload.document_ids),
+            Document.user_id == current_user.id,
+        )
         result = await db.execute(stmt)
         docs = result.scalars().all()
         found_ids = {d.id for d in docs}
@@ -52,7 +59,6 @@ async def create_knowledge_base(
     await db.flush()
     await db.refresh(kb)
 
-    # Reload with documents
     stmt = (
         select(KnowledgeBase)
         .where(KnowledgeBase.id == kb.id)
@@ -65,10 +71,12 @@ async def create_knowledge_base(
 @router.get("", response_model=KnowledgeBaseListResponse)
 async def list_knowledge_bases(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Return all knowledge bases with document counts."""
+    """Return all knowledge bases belonging to the current user."""
     stmt = (
         select(KnowledgeBase)
+        .where(KnowledgeBase.user_id == current_user.id)
         .options(selectinload(KnowledgeBase.documents))
         .order_by(KnowledgeBase.created_at.desc())
     )
@@ -91,11 +99,12 @@ async def list_knowledge_bases(
 async def get_knowledge_base(
     kb_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return a knowledge base with its documents."""
     stmt = (
         select(KnowledgeBase)
-        .where(KnowledgeBase.id == kb_id)
+        .where(KnowledgeBase.id == kb_id, KnowledgeBase.user_id == current_user.id)
         .options(selectinload(KnowledgeBase.documents))
     )
     result = await db.execute(stmt)
@@ -110,11 +119,12 @@ async def update_knowledge_base(
     kb_id: uuid.UUID,
     payload: KnowledgeBaseUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update a knowledge base name and/or replace its document set."""
     stmt = (
         select(KnowledgeBase)
-        .where(KnowledgeBase.id == kb_id)
+        .where(KnowledgeBase.id == kb_id, KnowledgeBase.user_id == current_user.id)
         .options(selectinload(KnowledgeBase.documents))
     )
     result = await db.execute(stmt)
@@ -126,7 +136,10 @@ async def update_knowledge_base(
         kb.name = payload.name
 
     if payload.document_ids is not None:
-        stmt = select(Document).where(Document.id.in_(payload.document_ids))
+        stmt = select(Document).where(
+            Document.id.in_(payload.document_ids),
+            Document.user_id == current_user.id,
+        )
         result = await db.execute(stmt)
         docs = result.scalars().all()
         found_ids = {d.id for d in docs}
@@ -155,11 +168,12 @@ async def add_document_to_knowledge_base(
     kb_id: uuid.UUID,
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Add a single document to a knowledge base."""
     stmt = (
         select(KnowledgeBase)
-        .where(KnowledgeBase.id == kb_id)
+        .where(KnowledgeBase.id == kb_id, KnowledgeBase.user_id == current_user.id)
         .options(selectinload(KnowledgeBase.documents))
     )
     result = await db.execute(stmt)
@@ -167,7 +181,9 @@ async def add_document_to_knowledge_base(
     if not kb:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Knowledge base not found")
 
-    doc_stmt = select(Document).where(Document.id == document_id)
+    doc_stmt = select(Document).where(
+        Document.id == document_id, Document.user_id == current_user.id
+    )
     doc_result = await db.execute(doc_stmt)
     doc = doc_result.scalar_one_or_none()
     if not doc:
@@ -192,11 +208,12 @@ async def remove_document_from_knowledge_base(
     kb_id: uuid.UUID,
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove a single document from a knowledge base."""
     stmt = (
         select(KnowledgeBase)
-        .where(KnowledgeBase.id == kb_id)
+        .where(KnowledgeBase.id == kb_id, KnowledgeBase.user_id == current_user.id)
         .options(selectinload(KnowledgeBase.documents))
     )
     result = await db.execute(stmt)
@@ -220,9 +237,12 @@ async def remove_document_from_knowledge_base(
 async def delete_knowledge_base(
     kb_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a knowledge base (does not delete the documents themselves)."""
-    stmt = select(KnowledgeBase).where(KnowledgeBase.id == kb_id)
+    stmt = select(KnowledgeBase).where(
+        KnowledgeBase.id == kb_id, KnowledgeBase.user_id == current_user.id
+    )
     result = await db.execute(stmt)
     kb = result.scalar_one_or_none()
     if not kb:

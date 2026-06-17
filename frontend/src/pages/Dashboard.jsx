@@ -6,9 +6,11 @@ import {
   listDecks,
   listDocuments,
 } from "../api/client.js";
+import { useAuth } from "../context/AuthContext.jsx";
 import "./Dashboard.css";
 
 export default function Dashboard() {
+  const { user } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [decks, setDecks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +46,7 @@ export default function Dashboard() {
       {/* ─── Hero ─────────────────────────────────────────────────────────── */}
       <div className="dashboard-hero">
         <div className="hero-text">
-          <h1>Welcome to LuraStudy</h1>
+          <h1>Welcome{user ? `, ${user.username}` : ""}!</h1>
           <p className="subtitle">
             Your AI-powered study workspace. Create decks, upload documents, and let AI generate flashcards for you.
           </p>

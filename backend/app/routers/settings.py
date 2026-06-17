@@ -1,6 +1,7 @@
 """
 Settings router.
 Handles reading and updating LLM / embedding configuration at runtime.
+Settings are now per-user.
 """
 import logging
 
@@ -9,6 +10,8 @@ from openai import AsyncOpenAI
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.dependencies import get_current_user
+from app.models.user import User
 from app.schemas.settings import (
     SettingsResponse,
     SettingsUpdate,
@@ -45,9 +48,12 @@ def _build_response(s: dict[str, str]) -> SettingsResponse:
 
 
 @router.get("", response_model=SettingsResponse)
-async def get_settings(db: AsyncSession = Depends(get_db)):
-    """Return the current LLM and embedding configuration."""
-    s = await get_all_settings(db)
+async def get_settings(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return the current user's LLM and embedding configuration."""
+    s = await get_all_settings(db, current_user.id)
     return _build_response(s)
 
 
@@ -55,11 +61,11 @@ async def get_settings(db: AsyncSession = Depends(get_db)):
 async def update_settings(
     update: SettingsUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Update one or more settings.
+    Update one or more settings for the current user.
     Only provided (non-None) fields are updated.
-    The LLM and embedding clients will use the new values on the next request.
     """
     updates: dict[str, str] = {}
 
@@ -79,11 +85,10 @@ async def update_settings(
         updates[EMBEDDING_DIMENSIONS] = str(update.embedding_dimensions)
 
     if updates:
-        await set_settings(db, updates)
-        # Invalidate cached clients so they pick up the new config
+        await set_settings(db, current_user.id, updates)
         _invalidate_clients()
 
-    s = await get_all_settings(db)
+    s = await get_all_settings(db, current_user.id)
     return _build_response(s)
 
 
@@ -91,12 +96,13 @@ async def update_settings(
 async def test_connection(
     req: TestConnectionRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
     Test connectivity to the LLM or embedding endpoint.
     Uses the provided values (or falls back to current saved settings).
     """
-    s = await get_all_settings(db)
+    s = await get_all_settings(db, current_user.id)
 
     if req.type == "llm":
         base_url = req.base_url or s[LLM_BASE_URL]
@@ -105,7 +111,6 @@ async def test_connection(
 
         try:
             client = AsyncOpenAI(base_url=base_url, api_key=api_key)
-            # Try a minimal completion to verify the model is reachable
             response = await client.chat.completions.create(
                 model=model,
                 messages=[{"role": "user", "content": "Say 'ok' in one word."}],

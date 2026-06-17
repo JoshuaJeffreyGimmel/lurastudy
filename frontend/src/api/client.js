@@ -1,15 +1,26 @@
 /**
  * LuraStudy API client
  * All requests go through the Vite proxy → FastAPI backend
+ * Attaches JWT Bearer token from localStorage to every request.
+ * On 401, clears the token and redirects to /login.
  */
 
 const BASE = "/api/v1";
+
+function getToken() {
+  return localStorage.getItem("lurastudy_token");
+}
 
 async function request(method, path, body = null) {
   const options = {
     method,
     headers: {},
   };
+
+  const token = getToken();
+  if (token) {
+    options.headers["Authorization"] = `Bearer ${token}`;
+  }
 
   if (body && !(body instanceof FormData)) {
     options.headers["Content-Type"] = "application/json";
@@ -19,6 +30,14 @@ async function request(method, path, body = null) {
   }
 
   const res = await fetch(`${BASE}${path}`, options);
+
+  if (res.status === 401) {
+    // Token expired or invalid — clear it and redirect to login
+    localStorage.removeItem("lurastudy_token");
+    localStorage.removeItem("lurastudy_user");
+    window.location.href = "/login";
+    throw new Error("Session expired. Please log in again.");
+  }
 
   if (!res.ok) {
     let detail = `HTTP ${res.status}`;
@@ -31,6 +50,68 @@ async function request(method, path, body = null) {
 
   if (res.status === 204) return null;
   return res.json();
+}
+
+// ─── Auth ─────────────────────────────────────────────────────────────────────
+
+export async function login(username, password) {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      detail = err.detail || detail;
+    } catch (_) {}
+    throw new Error(detail);
+  }
+  return res.json(); // { access_token, token_type }
+}
+
+export async function register(username, password, email, inviteToken) {
+  const body = { username, password };
+  if (email) body.email = email;
+  if (inviteToken) body.invite_token = inviteToken;
+  const res = await fetch(`${BASE}/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let detail = `HTTP ${res.status}`;
+    try {
+      const err = await res.json();
+      detail = err.detail || detail;
+    } catch (_) {}
+    throw new Error(detail);
+  }
+  return res.json(); // UserResponse
+}
+
+export async function getMe() {
+  return request("GET", "/auth/me");
+}
+
+// ─── Admin ────────────────────────────────────────────────────────────────────
+
+export async function createInvite(expiresInDays) {
+  const query = expiresInDays ? `?expires_in_days=${expiresInDays}` : "";
+  return request("POST", `/admin/invites${query}`);
+}
+
+export async function listInvites() {
+  return request("GET", "/admin/invites");
+}
+
+export async function revokeInvite(token) {
+  return request("DELETE", `/admin/invites/${token}`);
+}
+
+export async function listUsers() {
+  return request("GET", "/admin/users");
 }
 
 // ─── Documents ────────────────────────────────────────────────────────────────

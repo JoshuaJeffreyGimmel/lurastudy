@@ -1,10 +1,10 @@
 """
-Config store service — reads and writes app settings from the database.
+Config store service — reads and writes per-user app settings from the database.
 Provides a typed interface over the AppSetting key-value table.
 Falls back to the .env / pydantic settings when a key is not in the DB.
 """
 import logging
-from typing import Optional
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,9 +47,9 @@ DEFAULTS: dict[str, str] = {
 }
 
 
-async def get_all_settings(db: AsyncSession) -> dict[str, str]:
-    """Return all settings, merging DB values over defaults."""
-    stmt = select(AppSetting)
+async def get_all_settings(db: AsyncSession, user_id: uuid.UUID) -> dict[str, str]:
+    """Return all settings for a user, merging DB values over defaults."""
+    stmt = select(AppSetting).where(AppSetting.user_id == user_id)
     result = await db.execute(stmt)
     rows = {row.key: row.value for row in result.scalars().all()}
 
@@ -58,9 +58,11 @@ async def get_all_settings(db: AsyncSession) -> dict[str, str]:
     return merged
 
 
-async def get_setting(db: AsyncSession, key: str) -> str:
-    """Return a single setting value, falling back to the default."""
-    stmt = select(AppSetting).where(AppSetting.key == key)
+async def get_setting(db: AsyncSession, user_id: uuid.UUID, key: str) -> str:
+    """Return a single setting value for a user, falling back to the default."""
+    stmt = select(AppSetting).where(
+        AppSetting.user_id == user_id, AppSetting.key == key
+    )
     result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is not None:
@@ -68,19 +70,21 @@ async def get_setting(db: AsyncSession, key: str) -> str:
     return DEFAULTS.get(key, "")
 
 
-async def set_setting(db: AsyncSession, key: str, value: str) -> None:
-    """Upsert a single setting value."""
-    stmt = select(AppSetting).where(AppSetting.key == key)
+async def set_setting(db: AsyncSession, user_id: uuid.UUID, key: str, value: str) -> None:
+    """Upsert a single setting value for a user."""
+    stmt = select(AppSetting).where(
+        AppSetting.user_id == user_id, AppSetting.key == key
+    )
     result = await db.execute(stmt)
     row = result.scalar_one_or_none()
     if row is None:
-        row = AppSetting(key=key, value=value)
+        row = AppSetting(user_id=user_id, key=key, value=value)
         db.add(row)
     else:
         row.value = value
 
 
-async def set_settings(db: AsyncSession, updates: dict[str, str]) -> None:
-    """Upsert multiple settings at once."""
+async def set_settings(db: AsyncSession, user_id: uuid.UUID, updates: dict[str, str]) -> None:
+    """Upsert multiple settings at once for a user."""
     for key, value in updates.items():
-        await set_setting(db, key, value)
+        await set_setting(db, user_id, key, value)

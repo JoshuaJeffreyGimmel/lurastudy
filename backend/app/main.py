@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import documents, history, knowledge_bases, settings, study
+from app.routers import auth, admin, documents, history, knowledge_bases, settings, study
 
 # Import models so SQLAlchemy registers them before create_all
 import app.models  # noqa: F401
@@ -36,6 +36,8 @@ app.add_middleware(
 )
 
 # Register routers
+app.include_router(auth.router, prefix="/api/v1")
+app.include_router(admin.router, prefix="/api/v1")
 app.include_router(documents.router, prefix="/api/v1")
 app.include_router(study.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")

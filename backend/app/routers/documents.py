@@ -1,6 +1,7 @@
 """
 Document management router.
 Handles file uploads, text extraction, chunking, and embedding generation.
+All endpoints require authentication; documents are scoped to the current user.
 """
 import logging
 import os
@@ -8,12 +9,14 @@ import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.document import Chunk, Document
+from app.models.user import User
 from app.schemas.document import (
     ChunkResponse,
     DocumentChunksResponse,
@@ -60,9 +63,10 @@ ALLOWED_CONTENT_TYPES = {
 async def upload_document(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """
-    Upload a document (.pdf, .txt, .md).
+    Upload a document (.pdf, .txt, .md, etc.).
     Extracts text, chunks it, generates embeddings, and stores everything in the DB.
     """
     # Validate file extension
@@ -97,6 +101,7 @@ async def upload_document(
 
     # Create document record (status=processing)
     document = Document(
+        user_id=current_user.id,
         filename=stored_filename,
         original_filename=original_filename,
         file_type=ext,
@@ -122,7 +127,7 @@ async def upload_document(
             raise ValueError("Document produced no usable text chunks.")
 
         # Load embedding config from DB (falls back to .env defaults)
-        cfg = await get_all_settings(db)
+        cfg = await get_all_settings(db, current_user.id)
         emb_base_url = cfg[EMBEDDING_BASE_URL]
         emb_api_key = cfg[EMBEDDING_API_KEY]
         emb_model = cfg[EMBEDDING_MODEL]
@@ -154,7 +159,6 @@ async def upload_document(
     except Exception as e:
         logger.error("Failed to process document '%s': %s", original_filename, e)
         document.status = "error"
-        # Still commit so the document record exists with error status
         await db.flush()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -167,9 +171,14 @@ async def upload_document(
 @router.get("", response_model=DocumentListResponse)
 async def list_documents(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Return all uploaded documents."""
-    stmt = select(Document).order_by(Document.created_at.desc())
+    """Return all documents belonging to the current user."""
+    stmt = (
+        select(Document)
+        .where(Document.user_id == current_user.id)
+        .order_by(Document.created_at.desc())
+    )
     result = await db.execute(stmt)
     documents = result.scalars().all()
     return DocumentListResponse(documents=list(documents), total=len(documents))
@@ -179,9 +188,12 @@ async def list_documents(
 async def get_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Return a single document by ID."""
-    stmt = select(Document).where(Document.id == document_id)
+    """Return a single document by ID (must belong to current user)."""
+    stmt = select(Document).where(
+        Document.id == document_id, Document.user_id == current_user.id
+    )
     result = await db.execute(stmt)
     document = result.scalar_one_or_none()
     if not document:
@@ -193,9 +205,12 @@ async def get_document(
 async def get_document_chunks(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return all extracted text chunks for a document."""
-    stmt = select(Document).where(Document.id == document_id)
+    stmt = select(Document).where(
+        Document.id == document_id, Document.user_id == current_user.id
+    )
     result = await db.execute(stmt)
     document = result.scalar_one_or_none()
     if not document:
@@ -221,9 +236,12 @@ async def get_document_chunks(
 async def delete_document(
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a document and all its associated data."""
-    stmt = select(Document).where(Document.id == document_id)
+    stmt = select(Document).where(
+        Document.id == document_id, Document.user_id == current_user.id
+    )
     result = await db.execute(stmt)
     document = result.scalar_one_or_none()
     if not document:

@@ -1,6 +1,7 @@
 """
 Study router.
 Handles deck CRUD, flashcard generation, card state updates, and deck chat.
+All endpoints require authentication; decks are scoped to the current user.
 """
 import logging
 import uuid
@@ -12,8 +13,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.dependencies import get_current_user
 from app.models.document import Document
 from app.models.study import Deck, Flashcard
+from app.models.user import User
 from app.schemas.study import (
     ChatRequest,
     ChatResponse,
@@ -50,11 +53,11 @@ router = APIRouter(prefix="/study", tags=["study"])
 
 # ─── Helper ───────────────────────────────────────────────────────────────────
 
-async def _load_deck(deck_id: uuid.UUID, db: AsyncSession) -> Deck:
-    """Load a deck with its source_documents and flashcards, or raise 404."""
+async def _load_deck(deck_id: uuid.UUID, user_id: uuid.UUID, db: AsyncSession) -> Deck:
+    """Load a deck (owned by user) with its source_documents and flashcards, or raise 404."""
     stmt = (
         select(Deck)
-        .where(Deck.id == deck_id)
+        .where(Deck.id == deck_id, Deck.user_id == user_id)
         .options(
             selectinload(Deck.source_documents),
             selectinload(Deck.flashcards),
@@ -78,22 +81,25 @@ def _due_count(flashcards: list[Flashcard]) -> int:
 async def create_deck(
     payload: DeckCreate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Create a new empty deck workspace."""
-    deck = Deck(title=payload.title, description=payload.description)
+    deck = Deck(user_id=current_user.id, title=payload.title, description=payload.description)
     db.add(deck)
     await db.flush()
     await db.refresh(deck)
-    return await _load_deck(deck.id, db)
+    return await _load_deck(deck.id, current_user.id, db)
 
 
 @router.get("/decks", response_model=DeckListResponse)
 async def list_decks(
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """Return all decks with summary info including due card counts."""
+    """Return all decks belonging to the current user with summary info."""
     stmt = (
         select(Deck)
+        .where(Deck.user_id == current_user.id)
         .options(selectinload(Deck.source_documents), selectinload(Deck.flashcards))
         .order_by(Deck.updated_at.desc())
     )
@@ -122,9 +128,10 @@ async def list_decks(
 async def get_deck(
     deck_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Return a deck with its source documents and flashcards."""
-    deck = await _load_deck(deck_id, db)
+    deck = await _load_deck(deck_id, current_user.id, db)
     deck.flashcards.sort(key=lambda c: c.card_index)
     return deck
 
@@ -134,24 +141,26 @@ async def update_deck(
     deck_id: uuid.UUID,
     payload: DeckUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Update a deck's title or description."""
-    deck = await _load_deck(deck_id, db)
+    deck = await _load_deck(deck_id, current_user.id, db)
     if payload.title is not None:
         deck.title = payload.title
     if payload.description is not None:
         deck.description = payload.description
     await db.flush()
-    return await _load_deck(deck_id, db)
+    return await _load_deck(deck_id, current_user.id, db)
 
 
 @router.delete("/decks/{deck_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_deck(
     deck_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Delete a deck and all its flashcards."""
-    stmt = select(Deck).where(Deck.id == deck_id)
+    stmt = select(Deck).where(Deck.id == deck_id, Deck.user_id == current_user.id)
     result = await db.execute(stmt)
     deck = result.scalar_one_or_none()
     if not deck:
@@ -166,11 +175,14 @@ async def add_document_to_deck(
     deck_id: uuid.UUID,
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Add a source document to a deck."""
-    deck = await _load_deck(deck_id, db)
+    deck = await _load_deck(deck_id, current_user.id, db)
 
-    doc_stmt = select(Document).where(Document.id == document_id)
+    doc_stmt = select(Document).where(
+        Document.id == document_id, Document.user_id == current_user.id
+    )
     doc_result = await db.execute(doc_stmt)
     doc = doc_result.scalar_one_or_none()
     if not doc:
@@ -180,7 +192,7 @@ async def add_document_to_deck(
         deck.source_documents.append(doc)
         await db.flush()
 
-    return await _load_deck(deck_id, db)
+    return await _load_deck(deck_id, current_user.id, db)
 
 
 @router.delete("/decks/{deck_id}/documents/{document_id}", response_model=DeckResponse)
@@ -188,12 +200,13 @@ async def remove_document_from_deck(
     deck_id: uuid.UUID,
     document_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Remove a source document from a deck."""
-    deck = await _load_deck(deck_id, db)
+    deck = await _load_deck(deck_id, current_user.id, db)
     deck.source_documents = [d for d in deck.source_documents if d.id != document_id]
     await db.flush()
-    return await _load_deck(deck_id, db)
+    return await _load_deck(deck_id, current_user.id, db)
 
 
 # ─── Flashcard Generation ─────────────────────────────────────────────────────
@@ -203,12 +216,10 @@ async def generate_deck_flashcards(
     deck_id: uuid.UUID,
     request: GenerateFlashcardsRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Generate flashcards from all source documents in the deck.
-    Replaces any existing flashcards in the deck.
-    """
-    deck = await _load_deck(deck_id, db)
+    """Generate flashcards from all source documents in the deck."""
+    deck = await _load_deck(deck_id, current_user.id, db)
 
     if not deck.source_documents:
         raise HTTPException(
@@ -223,8 +234,7 @@ async def generate_deck_flashcards(
             detail="No ready documents found in this deck. Please wait for document processing to complete.",
         )
 
-    # Load LLM config
-    cfg = await get_all_settings(db)
+    cfg = await get_all_settings(db, current_user.id)
     llm_base_url = cfg[LLM_BASE_URL]
     llm_api_key = cfg[LLM_API_KEY]
     llm_model = cfg[LLM_MODEL]
@@ -274,7 +284,6 @@ async def generate_deck_flashcards(
                    "Please check your LLM configuration in Settings.",
         )
 
-    # Delete existing flashcards and replace with new ones
     for existing_card in deck.flashcards:
         await db.delete(existing_card)
     await db.flush()
@@ -286,7 +295,6 @@ async def generate_deck_flashcards(
             back=card["back"],
             card_index=idx,
             got_it=None,
-            # SM-2 defaults — new card, due immediately
             due_date=None,
             sm2_repetitions=0,
             sm2_ease_factor=2.5,
@@ -297,7 +305,7 @@ async def generate_deck_flashcards(
     await db.flush()
     logger.info("Generated %d flashcards for deck '%s'.", len(card_data), deck_id)
 
-    return await _load_deck(deck_id, db)
+    return await _load_deck(deck_id, current_user.id, db)
 
 
 # ─── Due Cards ────────────────────────────────────────────────────────────────
@@ -306,19 +314,15 @@ async def generate_deck_flashcards(
 async def get_due_cards(
     deck_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Return only the flashcards that are due today or overdue (including new/unseen cards).
-    Cards are sorted: overdue first, then new (null due_date), then by card_index.
-    """
-    deck = await _load_deck(deck_id, db)
+    """Return only the flashcards that are due today or overdue."""
+    deck = await _load_deck(deck_id, current_user.id, db)
 
     due_cards = [c for c in deck.flashcards if is_due(c.due_date)]
 
-    # Sort: overdue (earliest due_date first), then new cards (due_date is None), then by card_index
     def sort_key(card: Flashcard):
         if card.due_date is None:
-            # New cards come after overdue but before future cards
             return (1, date.today(), card.card_index)
         return (0, card.due_date, card.card_index)
 
@@ -339,11 +343,10 @@ async def chat_with_deck(
     deck_id: uuid.UUID,
     request: ChatRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Chat with the AI about the deck's source documents using RAG.
-    """
-    deck = await _load_deck(deck_id, db)
+    """Chat with the AI about the deck's source documents using RAG."""
+    deck = await _load_deck(deck_id, current_user.id, db)
 
     if not deck.source_documents:
         raise HTTPException(
@@ -358,15 +361,13 @@ async def chat_with_deck(
             detail="No ready documents found in this deck.",
         )
 
-    # Load LLM config
-    cfg = await get_all_settings(db)
+    cfg = await get_all_settings(db, current_user.id)
     llm_base_url = cfg[LLM_BASE_URL]
     llm_api_key = cfg[LLM_API_KEY]
     llm_model = cfg[LLM_MODEL]
 
     doc_ids = [d.id for d in ready_docs]
 
-    # Retrieve relevant chunks for the user's message
     try:
         context_chunks = await retrieve_relevant_chunks_multi(
             db=db,
@@ -384,7 +385,6 @@ async def chat_with_deck(
             detail="No text content found in the deck's source documents.",
         )
 
-    # Convert history to the format expected by the LLM service
     history = [{"role": msg.role, "content": msg.content} for msg in request.history]
 
     try:
@@ -400,7 +400,7 @@ async def chat_with_deck(
         logger.error("Chat LLM call failed: %s", e)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Failed to get a response from the LLM. Please check your settings.",
+            detail="Failed to get a response from the LLM. Please check your settings.",
         )
 
     return ChatResponse(reply=reply)
@@ -413,12 +413,10 @@ async def generate_deck_quiz(
     deck_id: uuid.UUID,
     request: GenerateQuizRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Generate a multiple-choice quiz from all source documents in the deck.
-    Questions are generated fresh each time (not persisted).
-    """
-    deck = await _load_deck(deck_id, db)
+    """Generate a multiple-choice quiz from all source documents in the deck."""
+    deck = await _load_deck(deck_id, current_user.id, db)
 
     if not deck.source_documents:
         raise HTTPException(
@@ -433,8 +431,7 @@ async def generate_deck_quiz(
             detail="No ready documents found in this deck. Please wait for document processing to complete.",
         )
 
-    # Load LLM config
-    cfg = await get_all_settings(db)
+    cfg = await get_all_settings(db, current_user.id)
     llm_base_url = cfg[LLM_BASE_URL]
     llm_api_key = cfg[LLM_API_KEY]
     llm_model = cfg[LLM_MODEL]
@@ -496,25 +493,21 @@ async def review_flashcard(
     flashcard_id: uuid.UUID,
     update: FlashcardReviewUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Submit an SM-2 review for a flashcard.
-
-    quality 0–5:
-      5 = Easy (perfect recall)
-      4 = Got It (correct with hesitation)
-      3 = Hard (correct but very difficult)
-      1 = Again (incorrect, remembered after seeing answer)
-      0 = Blackout (complete failure)
-    """
-    stmt = select(Flashcard).where(Flashcard.id == flashcard_id)
+    """Submit an SM-2 review for a flashcard."""
+    # Load flashcard and verify ownership via deck
+    stmt = (
+        select(Flashcard)
+        .join(Deck, Flashcard.deck_id == Deck.id)
+        .where(Flashcard.id == flashcard_id, Deck.user_id == current_user.id)
+    )
     result = await db.execute(stmt)
     flashcard = result.scalar_one_or_none()
 
     if not flashcard:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Flashcard not found")
 
-    # Apply SM-2 algorithm
     new_reps, new_ef, new_interval, new_due_date = apply_sm2(
         repetitions=flashcard.sm2_repetitions,
         ease_factor=flashcard.sm2_ease_factor,
@@ -526,8 +519,6 @@ async def review_flashcard(
     flashcard.sm2_ease_factor = new_ef
     flashcard.sm2_interval = new_interval
     flashcard.due_date = new_due_date
-
-    # Also update legacy got_it field for backward compatibility
     flashcard.got_it = update.quality >= 3
 
     await db.flush()
@@ -540,12 +531,14 @@ async def update_flashcard_state(
     flashcard_id: uuid.UUID,
     update: FlashcardStateUpdate,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Legacy endpoint: Update the 'got_it' state of a flashcard.
-    Prefer PATCH /flashcards/{id}/review for SM-2 scheduling.
-    """
-    stmt = select(Flashcard).where(Flashcard.id == flashcard_id)
+    """Legacy endpoint: Update the 'got_it' state of a flashcard."""
+    stmt = (
+        select(Flashcard)
+        .join(Deck, Flashcard.deck_id == Deck.id)
+        .where(Flashcard.id == flashcard_id, Deck.user_id == current_user.id)
+    )
     result = await db.execute(stmt)
     flashcard = result.scalar_one_or_none()
 
