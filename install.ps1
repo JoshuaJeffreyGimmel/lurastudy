@@ -24,6 +24,7 @@ $RepoBranch = "main"
 $RepoBase = "https://raw.githubusercontent.com/${RepoOwner}/${RepoName}/${RepoBranch}"
 $ComposeFile = "docker-compose.yml"
 $EnvExampleFile = ".env.example"
+$InstallDir = Join-Path $env:USERPROFILE "lurastudy"
 
 # ─── Helper functions ────────────────────────────────────────────────────────
 function Write-Info  { Write-Host "  -> $($args[0])" -ForegroundColor Cyan }
@@ -144,10 +145,10 @@ function Set-CloudProvider($provider, $apiKey) {
 try {
     Show-Banner
 
-    # Create temp directory
-    $TmpDir = Join-Path $env:TEMP "lurastudy-install-$(Get-Random)"
-    New-Item -ItemType Directory -Path $TmpDir -Force | Out-Null
-    Push-Location $TmpDir
+    # Create permanent installation directory
+    Write-Info "Setting up LuraStudy in: $InstallDir"
+    New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    Push-Location $InstallDir
 
     # ── Step 1: Check Docker ───────────────────────────────────────────────
     Write-Info "Checking prerequisites..."
@@ -155,7 +156,6 @@ try {
         Write-Err "Docker is not installed."
         Write-Host "     Install Docker Desktop: https://www.docker.com/products/docker-desktop/"
         Pop-Location
-        Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
         exit 1
     }
     Write-OK "Docker is installed."
@@ -168,14 +168,14 @@ try {
     if (-not $dockerRunning) {
         Write-Warn "Docker is installed but not running."
         Write-Info "Attempting to start Docker Desktop automatically..."
-        
+
         $dockerPaths = @(
             "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
             "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe",
             "$env:LOCALAPPDATA\Docker\Docker Desktop.exe",
             "$env:ProgramData\Docker\Docker Desktop.exe"
         )
-        
+
         $dockerExe = $null
         foreach ($path in $dockerPaths) {
             if (Test-Path $path) { $dockerExe = $path; break }
@@ -185,7 +185,7 @@ try {
             Write-Info "Found Docker Desktop at: $dockerExe"
             Start-Process -FilePath $dockerExe
             Write-Info "Waiting for Docker Desktop to start (this can take up to 2 minutes)..."
-            
+
             $maxAttempts = 24
             for ($i = 1; $i -le $maxAttempts; $i++) {
                 Start-Sleep -Seconds 5
@@ -200,7 +200,6 @@ try {
             Write-Err "Could not find Docker Desktop executable."
             Write-Host "     Please start Docker Desktop manually and run the installer again."
             Pop-Location
-            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
             exit 1
         }
 
@@ -208,7 +207,6 @@ try {
             Write-Err "Docker Desktop did not start within 2 minutes."
             Write-Host "     Please start Docker Desktop manually and run the installer again."
             Pop-Location
-            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
             exit 1
         }
     } else {
@@ -301,7 +299,7 @@ try {
 
             Write-Host ""
             Write-Info "Checking AI models (this may take a minute)..."
-            
+
             $models = Invoke-Native { ollama list }
             if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
                 Write-OK "llama3.2 already downloaded."
@@ -370,7 +368,6 @@ try {
             Write-Err "Failed to start LuraStudy."
             Write-Host "  Last error output: $($upResult -join ' ')"
             Pop-Location
-            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
             exit 1
         }
     }
@@ -388,15 +385,21 @@ try {
     Write-Host "  First time? Go to http://localhost:5173/register" -ForegroundColor Yellow
     Write-Host "    to create your admin account."
     Write-Host ""
+    Write-Host "  Config files saved to: $InstallDir" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  To restart later, open PowerShell and run:" -ForegroundColor Cyan
+    Write-Host "    cd '$InstallDir' ; docker compose up -d" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  To update to the latest version:" -ForegroundColor Cyan
+    Write-Host "    cd '$InstallDir' ; docker compose pull ; docker compose up -d" -ForegroundColor White
+    Write-Host ""
 
     # Open browser to register page
     try {
         Start-Process "http://localhost:5173/register"
     } catch {}
 
-    # Cleanup
     Pop-Location
-    Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
 
     # Keep window open
     Write-Host "Press any key to close this window..."
@@ -408,6 +411,5 @@ catch {
     Write-Host "Press any key to close this window..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     Pop-Location
-    Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
     exit 1
 }

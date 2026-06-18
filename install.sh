@@ -157,8 +157,10 @@ set_cloud_provider() {
 main() {
     print_banner
 
-    TMP_DIR=$(mktemp -d)
-    cd "$TMP_DIR"
+    INSTALL_DIR="$HOME/lurastudy"
+    info "Setting up LuraStudy in: $INSTALL_DIR"
+    mkdir -p "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
 
     # ── Step 1: Check Docker ───────────────────────────────────────────────
     info "Checking prerequisites..."
@@ -335,6 +337,14 @@ main() {
     echo -e "  👤 ${BOLD}First time?${NC} Go to http://localhost:5173/register"
     echo "    to create your admin account."
     echo ""
+    echo -e "  ${CYAN}Config files saved to:${NC} $INSTALL_DIR"
+    echo ""
+    echo -e "  ${CYAN}To restart later, run:${NC}"
+    echo -e "    cd $INSTALL_DIR && docker compose up -d"
+    echo ""
+    echo -e "  ${CYAN}To update to the latest version:${NC}"
+    echo -e "    cd $INSTALL_DIR && docker compose pull && docker compose up -d"
+    echo ""
 
     # Try to open browser
     case "$(uname -s)" in
@@ -342,9 +352,6 @@ main() {
         Linux)  xdg-open http://localhost:5173/register 2>/dev/null || true ;;
     esac
 
-    # Cleanup
-    cd /tmp
-    rm -rf "$TMP_DIR"
 }
 
 main "$@"
