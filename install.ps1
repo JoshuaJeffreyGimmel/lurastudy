@@ -5,17 +5,7 @@
     Downloads and starts LuraStudy with a single command.
     Run from PowerShell (as Administrator recommended):
         iwr -useb https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/install.ps1 | iex
-.PARAMETER Defaults
-    Use local AI (Ollama) defaults without asking.
-.EXAMPLE
-    iwr -useb https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/install.ps1 | iex
-.EXAMPLE
-    iwr -useb https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/install.ps1 | iex -args "--defaults"
 #>
-
-param(
-    [switch]$Defaults = $false
-)
 
 # ─── Config ──────────────────────────────────────────────────────────────────
 $RepoOwner = "JoshuaJeffreyGimmel"
@@ -23,15 +13,23 @@ $RepoName = "lurastudy"
 $RepoBranch = "main"
 $RepoBase = "https://raw.githubusercontent.com/${RepoOwner}/${RepoName}/${RepoBranch}"
 $ComposeFile = "docker-compose.yml"
-$ComposeCloudFile = "docker-compose.cloud.yml"
 $EnvExampleFile = ".env.example"
 $InstallDir = Join-Path $env:USERPROFILE "lurastudy"
 
+# ─── Colors ──────────────────────────────────────────────────────────────────
+$Cyan = [System.ConsoleColor]::Cyan
+$Green = [System.ConsoleColor]::Green
+$Yellow = [System.ConsoleColor]::Yellow
+$Red = [System.ConsoleColor]::Red
+$White = [System.ConsoleColor]::White
+$Magenta = [System.ConsoleColor]::Magenta
+$DarkGray = [System.ConsoleColor]::DarkGray
+
 # ─── Helper functions ────────────────────────────────────────────────────────
-function Write-Info  { Write-Host "  -> $($args[0])" -ForegroundColor Cyan }
-function Write-OK   { Write-Host "  OK $($args[0])" -ForegroundColor Green }
-function Write-Warn { Write-Host "  !! $($args[0])" -ForegroundColor Yellow }
-function Write-Err  { Write-Host "  XX $($args[0])" -ForegroundColor Red }
+function Write-Info  { Write-Host "  -> $($args[0])" -ForegroundColor $Cyan }
+function Write-OK   { Write-Host "  OK $($args[0])" -ForegroundColor $Green }
+function Write-Warn { Write-Host "  !! $($args[0])" -ForegroundColor $Yellow }
+function Write-Err  { Write-Host "  XX $($args[0])" -ForegroundColor $Red }
 
 function Invoke-Native {
     param([ScriptBlock]$ScriptBlock)
@@ -50,16 +48,14 @@ function Invoke-Native {
 
 function Show-Banner {
     Clear-Host
+    Write-Host "  ___  _   _ ____   ____  _   _ _____    __  __" -ForegroundColor $Magenta
+    Write-Host " / _ \| | | |  _ \ / ___|| | | |_   _|  |  \/  |" -ForegroundColor $Magenta
+    Write-Host "| | | | | | | |_) |\___ \| | | | | |    | |\/| |" -ForegroundColor $Magenta
+    Write-Host "| |_| | |_| |  _ <  ___) | |_| | | |    | |  | |" -ForegroundColor $Magenta
+    Write-Host " \___/ \___/|_| \_\|____/ \___/  |_|    |_|  |_|" -ForegroundColor $Magenta
     Write-Host ""
-    Write-Host "  _     _               _   _     _           " -ForegroundColor Cyan
-    Write-Host " | |   | |             | | | |   (_)          " -ForegroundColor Cyan
-    Write-Host " | |   | | _ __ ___  __| | | |    _ _ __  ___ " -ForegroundColor Cyan
-    Write-Host " | |   | || '__/ _ \/ _\` | | |   | | '_ \/ __|" -ForegroundColor Cyan
-    Write-Host " | |___| || | |  __/ (_| | | |___| | | | \__ \" -ForegroundColor Cyan
-    Write-Host "  \_____(_)_|  \___|\__,_| |_____|_|_| |_|___/" -ForegroundColor Cyan
-    Write-Host ""
-    Write-Host "Local-first AI study assistant" -ForegroundColor White
-    Write-Host "One-command installer - v0.1.0" -ForegroundColor Yellow
+    Write-Host "  Local-first AI study assistant" -ForegroundColor $White
+    Write-Host "  One-command installer - v0.1.0" -ForegroundColor $DarkGray
     Write-Host ""
 }
 
@@ -158,175 +154,33 @@ try {
     Copy-Item $EnvExampleFile ".env"
     Write-OK "Created .env from template."
 
-    # ── Step 4: Configure AI (local vs cloud) ──────────────────────────────
+    # ── Step 4: Check for Ollama (optional) ────────────────────────────────
     Write-Host ""
-    $useCloud = $false
+    Write-Info "Checking for Ollama..."
+    if (Test-Command ollama) {
+        Write-OK "Ollama is installed."
+        Write-Info "Checking AI models (this may take a minute)..."
 
-    if ($Defaults) {
-        Write-Info "Non-interactive mode: using local AI (Ollama)."
-        $useCloud = $false
-    } else {
-        Write-Info "How do you want to run the AI?"
-        Write-Host "   1) Local - use Ollama (free, private, runs on your machine) [default]"
-        Write-Host "   2) Cloud - use an API provider"
-        Write-Host ""
-        $aiChoice = Read-Host "  Choose [1/2]"
-
-        if ($aiChoice -eq "2" -or $aiChoice -eq "cloud") {
-            $useCloud = $true
-        }
-    }
-
-    if ($useCloud) {
-        # Download the cloud compose override file
-        Download-File "${RepoBase}/${ComposeCloudFile}" $ComposeCloudFile
-
-        Write-Host ""
-        Write-Info "Select your LLM provider (all use OpenAI-compatible API):"
-        Write-Host "   1) OpenAI       - gpt-4o-mini"
-        Write-Host "   2) Groq         - llama-3.3-70b (free tier available)"
-        Write-Host "   3) Together AI  - Llama-3.2-3B-Instruct"
-        Write-Host "   4) DeepSeek     - deepseek-chat"
-        Write-Host "   5) Mistral AI   - mistral-small-latest"
-        Write-Host "   6) xAI (Grok)   - grok-2"
-        Write-Host "   7) OpenRouter   - any model (Claude, Gemini, GPT, etc.)"
-        Write-Host "   8) Custom       - enter your own endpoint"
-        Write-Host ""
-        $providerChoice = Read-Host "  Choose [1-8]"
-
-        switch ($providerChoice) {
-            "1" { $provider = "openai" }
-            "2" { $provider = "groq" }
-            "3" { $provider = "together" }
-            "4" { $provider = "deepseek" }
-            "5" { $provider = "mistral" }
-            "6" { $provider = "xai" }
-            "7" { $provider = "openrouter" }
-            "8" { $provider = "custom" }
-            default { $provider = "openai" }
-        }
-
-        Write-Host ""
-        Write-Info "Provider selected: $provider"
-        $apiKey = Read-Host "  Enter your API key"
-
-        if ($provider -eq "custom") {
-            Write-Host ""
-            $customUrl = Read-Host "  Enter the LLM base URL (e.g. https://api.example.com/v1)"
-            $customModel = Read-Host "  Enter the model name (e.g. my-model)"
-            $customEmbedModel = Read-Host "  Enter the embedding model name (e.g. my-embed-model)"
-            $customEmbedDims = Read-Host "  Enter the embedding dimensions (e.g. 768)"
-        }
-
-        if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
-            # Update .env with provider settings directly here (not in a function)
-            $envContent = Get-Content ".env" -Raw
-
-            switch ($provider) {
-                "openai" {
-                    $baseUrl = "https://api.openai.com/v1"
-                    $model = "gpt-4o-mini"
-                    $embedModel = "text-embedding-3-small"
-                    $embedDims = "1536"
-                }
-                "groq" {
-                    $baseUrl = "https://api.groq.com/openai/v1"
-                    $model = "llama-3.3-70b-versatile"
-                    $embedModel = "llama-3.3-70b-versatile"
-                    $embedDims = "768"
-                }
-                "together" {
-                    $baseUrl = "https://api.together.xyz/v1"
-                    $model = "meta-llama/Llama-3.2-3B-Instruct-Turbo"
-                    $embedModel = "thenlper/gte-base"
-                    $embedDims = "768"
-                }
-                "deepseek" {
-                    $baseUrl = "https://api.deepseek.com/v1"
-                    $model = "deepseek-chat"
-                    $embedModel = "deepseek-chat"
-                    $embedDims = "1536"
-                }
-                "mistral" {
-                    $baseUrl = "https://api.mistral.ai/v1"
-                    $model = "mistral-small-latest"
-                    $embedModel = "mistral-embed"
-                    $embedDims = "1024"
-                }
-                "xai" {
-                    $baseUrl = "https://api.x.ai/v1"
-                    $model = "grok-2"
-                    $embedModel = "grok-2"
-                    $embedDims = "1536"
-                }
-                "openrouter" {
-                    $baseUrl = "https://openrouter.ai/api/v1"
-                    $model = "openai/gpt-4o-mini"
-                    $embedModel = "openai/text-embedding-3-small"
-                    $embedDims = "1536"
-                }
-                "custom" {
-                    $baseUrl = $customUrl
-                    $model = $customModel
-                    $embedModel = $customEmbedModel
-                    $embedDims = $customEmbedDims
-                }
-            }
-
-            $replaces = @{
-                "LLM_BASE_URL=.*" = "LLM_BASE_URL=$baseUrl"
-                "LLM_API_KEY=.*" = "LLM_API_KEY=$apiKey"
-                "LLM_MODEL=.*" = "LLM_MODEL=$model"
-                "EMBEDDING_BASE_URL=.*" = "EMBEDDING_BASE_URL=$baseUrl"
-                "EMBEDDING_API_KEY=.*" = "EMBEDDING_API_KEY=$apiKey"
-                "EMBEDDING_MODEL=.*" = "EMBEDDING_MODEL=$embedModel"
-                "EMBEDDING_DIMENSIONS=.*" = "EMBEDDING_DIMENSIONS=$embedDims"
-            }
-
-            foreach ($pattern in $replaces.Keys) {
-                $envContent = $envContent -replace $pattern, $replaces[$pattern]
-            }
-            Set-Content ".env" -Value $envContent
-            Write-OK "API key saved for $provider."
+        $models = Invoke-Native { ollama list }
+        if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
+            Write-OK "llama3.2 already downloaded."
         } else {
-            Write-Warn "No API key provided. You can configure it later in Settings."
+            Write-Info "Downloading llama3.2 (~2 GB)..."
+            Invoke-Native { ollama pull llama3.2 } | Out-Null
+            Write-OK "llama3.2 ready."
         }
-
-    } else {
-        # Local AI — check Ollama
-        Write-Host ""
-        Write-Info "Local AI selected. Checking for Ollama..."
-        if (Test-Command ollama) {
-            Write-OK "Ollama is installed."
-
-            Write-Host ""
-            Write-Info "Checking AI models (this may take a minute)..."
-
-            $models = Invoke-Native { ollama list }
-            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
-                Write-OK "llama3.2 already downloaded."
-            } else {
-                Write-Info "Downloading llama3.2 (~2 GB)..."
-                Write-Host "  This may take a while depending on your internet speed."
-                Invoke-Native { ollama pull llama3.2 } | Out-Null
-                Write-OK "llama3.2 ready."
-            }
-
-            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "nomic-embed-text") {
-                Write-OK "nomic-embed-text already downloaded."
-            } else {
-                Write-Info "Downloading nomic-embed-text (~274 MB)..."
-                Invoke-Native { ollama pull nomic-embed-text } | Out-Null
-                Write-OK "nomic-embed-text ready."
-            }
+        if ($global:LASTEXITCODE -eq 0 -and "$models" -match "nomic-embed-text") {
+            Write-OK "nomic-embed-text already downloaded."
         } else {
-            Write-Warn "Ollama not detected."
-            Write-Host "     You'll need to install Ollama and pull the models manually:"
-            Write-Host "       1. Install: https://ollama.ai/"
-            Write-Host "       2. Run: ollama pull llama3.2 && ollama pull nomic-embed-text"
-            Write-Host ""
-            Write-Host "     The app will still start, but AI features won't work until Ollama is set up."
+            Write-Info "Downloading nomic-embed-text (~274 MB)..."
+            Invoke-Native { ollama pull nomic-embed-text } | Out-Null
+            Write-OK "nomic-embed-text ready."
         }
+    } else {
+        Write-Warn "Ollama not detected."
+        Write-Host "     To use local AI, install Ollama: https://ollama.ai/"
+        Write-Host "     Then run: ollama pull llama3.2 and ollama pull nomic-embed-text"
+        Write-Host "     Or use a cloud provider - configure it in Settings after logging in."
     }
 
     # ── Step 5: Clean up any previous LuraStudy containers ────────────────
@@ -347,15 +201,11 @@ try {
     }
 
     # ── Step 7: Start Docker Compose ───────────────────────────────────────
-    # Note: .env already has the correct provider settings from Step 4.
-    # docker-compose.cloud.yml is NOT used because it hardcodes OpenAI values
-    # which would override .env. The user can manually add it if needed.
     Write-Host ""
     Write-Info "Starting LuraStudy..."
     $upResult = Invoke-Native { docker compose up -d }
     if ($global:LASTEXITCODE -ne 0) {
-        Write-Warn "'docker compose up -d' failed."
-        Write-Info "Trying with local build instead..."
+        Write-Warn "docker compose up -d failed. Trying with local build..."
         $upResult = Invoke-Native { docker compose up --build -d }
         if ($global:LASTEXITCODE -ne 0) {
             Write-Err "Failed to start LuraStudy."
@@ -367,24 +217,25 @@ try {
 
     # ── Step 8: Success ────────────────────────────────────────────────────
     Write-Host ""
-    Write-Host "============================================" -ForegroundColor Green
-    Write-Host "  LuraStudy is running!" -ForegroundColor Green
-    Write-Host "============================================" -ForegroundColor Green
+    Write-Host "============================================" -ForegroundColor $Green
+    Write-Host "  LuraStudy is running!" -ForegroundColor $Green
+    Write-Host "============================================" -ForegroundColor $Green
     Write-Host ""
-    Write-Host "  Frontend:  http://localhost:5173" -ForegroundColor White
-    Write-Host "  Backend:   http://localhost:8000" -ForegroundColor White
-    Write-Host "  API Docs:  http://localhost:8000/docs" -ForegroundColor White
+    Write-Host "  Frontend:  http://localhost:5173" -ForegroundColor $White
+    Write-Host "  Backend:   http://localhost:8000" -ForegroundColor $White
+    Write-Host "  API Docs:  http://localhost:8000/docs" -ForegroundColor $White
     Write-Host ""
-    Write-Host "  First time? Go to http://localhost:5173/register" -ForegroundColor Yellow
+    Write-Host "  First time? Go to http://localhost:5173/register" -ForegroundColor $Yellow
     Write-Host "    to create your admin account."
+    Write-Host "  Then configure your AI provider in Settings -> LLM / Embedding."
     Write-Host ""
-    Write-Host "  Config files saved to: $InstallDir" -ForegroundColor Cyan
+    Write-Host "  Config files saved to: $InstallDir" -ForegroundColor $Cyan
     Write-Host ""
-    Write-Host "  To restart later, open PowerShell and run:" -ForegroundColor Cyan
-    Write-Host "    cd '$InstallDir' ; docker compose up -d" -ForegroundColor White
+    Write-Host "  To restart later, open PowerShell and run:" -ForegroundColor $Cyan
+    Write-Host "    cd $InstallDir ; docker compose up -d" -ForegroundColor $White
     Write-Host ""
-    Write-Host "  To update to the latest version:" -ForegroundColor Cyan
-    Write-Host "    cd '$InstallDir' ; docker compose pull ; docker compose up -d" -ForegroundColor White
+    Write-Host "  To update to the latest version:" -ForegroundColor $Cyan
+    Write-Host "    cd $InstallDir ; docker compose pull ; docker compose up -d" -ForegroundColor $White
     Write-Host ""
 
     # Open browser to register page
@@ -394,7 +245,6 @@ try {
 
     Pop-Location
 
-    # Keep window open
     Write-Host "Press any key to close this window..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
