@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
-from app.routers import auth, admin, documents, history, knowledge_bases, settings, study
+from app.routers import auth, admin, documents, health, history, knowledge_bases, settings, study
 
 # Import models so SQLAlchemy registers them before create_all
 import app.models  # noqa: F401
@@ -43,6 +43,7 @@ app.include_router(study.router, prefix="/api/v1")
 app.include_router(settings.router, prefix="/api/v1")
 app.include_router(knowledge_bases.router, prefix="/api/v1")
 app.include_router(history.router, prefix="/api/v1")
+app.include_router(health.router)
 
 
 @app.on_event("startup")
@@ -52,9 +53,3 @@ async def on_startup():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database ready.")
-
-
-@app.get("/health", tags=["health"])
-async def health_check():
-    """Simple health check endpoint."""
-    return {"status": "ok", "service": "lurastudy-backend"}

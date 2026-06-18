@@ -4,11 +4,13 @@ import { AuthProvider, useAuth } from "./context/AuthContext.jsx";
 import { applyTheme } from "./theme.js";
 import { getSettings } from "./api/client.js";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import StatusBanner from "./components/StatusBanner.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import DecksPage from "./pages/DecksPage.jsx";
 import DeckWorkspacePage from "./pages/DeckWorkspacePage.jsx";
 import DocumentsPage from "./pages/DocumentsPage.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
+import OnboardingPage, { isOnboardingDone } from "./pages/OnboardingPage.jsx";
 import QuizPage from "./pages/QuizPage.jsx";
 import RegisterPage from "./pages/RegisterPage.jsx";
 import SettingsPage from "./pages/SettingsPage.jsx";
@@ -51,9 +53,17 @@ function AppShell() {
           </span>
         )}
       </nav>
+      <StatusBanner />
       <main className="app-main">
         <Routes>
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                {user && !isOnboardingDone() ? <OnboardingPage /> : <Dashboard />}
+              </ProtectedRoute>
+            }
+          />
           <Route path="/decks" element={<ProtectedRoute><DecksPage /></ProtectedRoute>} />
           <Route path="/decks/:deckId" element={<ProtectedRoute><DeckWorkspacePage /></ProtectedRoute>} />
           <Route path="/documents" element={<ProtectedRoute><DocumentsPage /></ProtectedRoute>} />

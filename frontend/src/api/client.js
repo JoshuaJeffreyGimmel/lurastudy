@@ -1,6 +1,6 @@
 /**
  * LuraStudy API client
- * All requests go through the Vite proxy → FastAPI backend
+ * All requests go through the Vite proxy -> FastAPI backend
  * Attaches JWT Bearer token from localStorage to every request.
  * On 401, clears the token and redirects to /login.
  */
@@ -404,4 +404,66 @@ export async function updateSettings(updates) {
 
 export async function testConnection(payload) {
   return request("POST", "/settings/test-connection", payload);
+}
+
+// ─── Health ───────────────────────────────────────────────────────────────────
+
+/**
+ * Check overall server health.
+ * Response: { status: "ok", service: "lurastudy-backend" }
+ */
+export async function checkHealth() {
+  const res = await fetch(`/api/v1/health`);
+  if (!res.ok) throw new Error(`Health check failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Detailed connectivity check.
+ * Response: { database, llm, embedding, llm_configured, embedding_configured }
+ */
+export async function checkConnectivity() {
+  return request("GET", "/health/connectivity");
+}
+
+/**
+ * Parse an API error into a user-friendly message.
+ * Shows guidance for common issues (Ollama not running, no documents, etc.)
+ */
+export function parseApiError(error) {
+  const msg = error?.message || String(error);
+
+  // Ollama / LLM connectivity
+  if (msg.includes("check your LLM configuration") || msg.includes("connection") || msg.includes("Failed to connect")) {
+    return "⚠️ Can't reach the AI model. If using Ollama, make sure it's running (`ollama serve`). If using OpenAI, check your API key in Settings.";
+  }
+
+  // RAG / document issues
+  if (msg.includes("No ready documents") || msg.includes("No text content")) {
+    return "📄 No usable content found. Upload a document and wait for it to finish processing (status becomes 'ready').";
+  }
+
+  if (msg.includes("no source documents")) {
+    return "📚 This deck has no source documents. Add documents to the deck first.";
+  }
+
+  // Auth
+  if (msg.includes("401") || msg.includes("unauthorized") || msg.includes("Session expired")) {
+    return "🔑 Your session expired. Please log in again.";
+  }
+
+  if (msg.includes("409") || msg.includes("already exists")) {
+    return "📛 That name is already taken. Try a different one.";
+  }
+
+  if (msg.includes("404") || msg.includes("not found")) {
+    return "🔍 The requested item was not found. It may have been deleted.";
+  }
+
+  if (msg.includes("502") || msg.includes("Bad Gateway")) {
+    return "⚠️ The AI service is not responding. Check your LLM configuration in Settings.";
+  }
+
+  // Fallback
+  return `❌ ${msg}`;
 }

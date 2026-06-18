@@ -1,0 +1,21 @@
+version: "3.9"
+
+# ─── Cloud-LLM Profile ──────────────────────────────────────────────────────────
+# For users who want to use OpenAI (or any remote LLM) without running Ollama.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml up --build
+#
+# This overrides the backend environment to set sensible defaults for remote LLMs.
+# No changes to .env are required — just set LLM_API_KEY and EMBEDDING_API_KEY.
+
+services:
+  backend:
+    environment:
+      # These override .env defaults so the app works without Ollama.
+      # Configure your actual API key via the Settings page in the UI.
+      LLM_BASE_URL: https://api.openai.com/v1
+      LLM_MODEL: gpt-4o-mini
+      EMBEDDING_BASE_URL: https://api.openai.com/v1
+      EMBEDDING_MODEL: text-embedding-3-small
+      EMBEDDING_DIMENSIONS: "1536"

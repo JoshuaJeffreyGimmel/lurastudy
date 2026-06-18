@@ -253,3 +253,132 @@ button:active:not(:disabled) {
   border: 1px solid rgba(108,99,255,0.3);
   color: #a5b4fc;
 }
+
+/* ─── Status Banner ─────────────────────────────────────────────────────────── */
+.status-banner-container {
+  position: sticky;
+  top: 56px;
+  z-index: 99;
+}
+
+.status-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem 1.5rem;
+  font-size: 0.85rem;
+  border-bottom: 1px solid;
+}
+
+.status-banner--error {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.status-banner--warn {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #fcd34d;
+}
+
+.status-banner-text {
+  flex: 1;
+}
+
+.status-banner-close {
+  background: transparent;
+  border: none;
+  color: inherit;
+  opacity: 0.5;
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.status-banner-close:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* ─── Onboarding Page ────────────────────────────────────────────────────────── */
+.onboarding {
+  max-width: 640px;
+  margin: 3rem auto;
+  text-align: center;
+}
+
+.onboarding h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.onboarding .subtitle {
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  margin-bottom: 2.5rem;
+}
+
+.onboarding-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 2.5rem;
+  text-align: left;
+}
+
+.onboarding-step {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  transition: border-color var(--transition);
+}
+
+.onboarding-step:hover {
+  border-color: var(--color-primary);
+}
+
+.onboarding-step--done {
+  border-color: var(--color-success);
+  opacity: 0.8;
+}
+
+.onboarding-step--done .onboarding-step-icon {
+  background: var(--color-success);
+  color: #fff;
+}
+
+.onboarding-step-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.onboarding-step-body h3 {
+  font-size: 1rem;
+  margin-bottom: 0.2rem;
+}
+
+.onboarding-step-body p {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.onboarding-dismiss-btn {
+  margin-top: 1rem;
+}
