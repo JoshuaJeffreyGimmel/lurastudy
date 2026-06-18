@@ -82,6 +82,18 @@ download_file() {
 main() {
     print_banner
 
+    # ── Step 0: Confirmation prompt ──────────────────────────────────────
+    echo -e "  ${WHITE}This will install LuraStudy to:${NC} $HOME/lurastudy"
+    echo -e "  ${GRAY}Docker Desktop must be installed.${NC}"
+    echo -e "  ${GRAY}Ollama is optional (for local AI).${NC}"
+    echo ""
+    read -r -p "  Press ENTER to start, or type 'exit' to cancel: " confirm
+    if [ "$confirm" = "exit" ] || [ "$confirm" = "no" ] || [ "$confirm" = "n" ]; then
+        echo -e "  ${YELLOW}Installation cancelled.${NC}"
+        exit 0
+    fi
+    echo ""
+
     INSTALL_DIR="$HOME/lurastudy"
     info "Setting up LuraStudy in: $INSTALL_DIR"
     mkdir -p "$INSTALL_DIR"

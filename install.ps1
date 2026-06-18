@@ -81,6 +81,18 @@ function Download-File($url, $output) {
 try {
     Show-Banner
 
+    # ── Step 0: Confirmation prompt ──────────────────────────────────────
+    Write-Host "  This will install LuraStudy to: $InstallDir" -ForegroundColor $White
+    Write-Host "  Docker Desktop must be installed." -ForegroundColor $DarkGray
+    Write-Host "  Ollama is optional (for local AI)." -ForegroundColor $DarkGray
+    Write-Host ""
+    $confirm = Read-Host "  Press ENTER to start, or type 'exit' to cancel"
+    if ($confirm -eq "exit" -or $confirm -eq "no" -or $confirm -eq "n") {
+        Write-Host "  Installation cancelled." -ForegroundColor $Yellow
+        exit 0
+    }
+    Write-Host ""
+
     # Create permanent installation directory
     Write-Info "Setting up LuraStudy in: $InstallDir"
     New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
