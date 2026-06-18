@@ -4,13 +4,14 @@ version: "3.9"
 # For users who want to use OpenAI (or any remote LLM) without running Ollama.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml up --build
+#   docker compose -f docker-compose.yml -f docker-compose.cloud.yml up
 #
 # This overrides the backend environment to set sensible defaults for remote LLMs.
 # No changes to .env are required — just set LLM_API_KEY and EMBEDDING_API_KEY.
 
 services:
   backend:
+    image: joshuajeffreygimmel/lurastudy-backend:latest
     environment:
       # These override .env defaults so the app works without Ollama.
       # Configure your actual API key via the Settings page in the UI.

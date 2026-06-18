@@ -39,7 +39,23 @@
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (1 command)
+
+**Linux / macOS:**
+```bash
+curl -fsSL https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/install.sh | sh
+```
+
+**Windows (PowerShell as Administrator):**
+```powershell
+iwr -useb https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/install.ps1 | iex
+```
+
+> That's it! The installer will check for Docker, download the configuration files, prompt
+> you to choose local or cloud AI, then pull the pre-built Docker images and start everything.
+> Your browser will open to **http://localhost:5173** when ready.
+
+### Step-by-step (manual)
 
 ### Step 1: Install Prerequisites
 
@@ -63,8 +79,8 @@ ollama pull nomic-embed-text
 
 ```bash
 # Clone the project
-git clone https://github.com/JoshuaJeffreyGimmel/lurastudy-dev.git
-cd lurastudy-dev
+git clone https://github.com/JoshuaJeffreyGimmel/lurastudy.git
+cd lurastudy
 
 # Create config file
 cp .env.example .env
@@ -283,6 +299,22 @@ npm run dev
 | Auth | JWT (`python-jose`) + bcrypt password hashing |
 | LLM | OpenAI SDK (any compatible endpoint — Ollama, OpenAI, vLLM, etc.) |
 | Container | Docker + Docker Compose |
+
+---
+
+## 📜 License
+
+This project is licensed under the **MIT License** — see the [LICENSE](./LICENSE) file for details.
+
+---
+
+## ⭐ Early Access
+
+New features land on the `develop` branch first and are published as Docker images tagged `:early-access`.
+Stable releases ship to the `main` branch as `:latest` approximately 2–3 months later.
+
+If you'd like to support development and get early access to the newest features, check the project
+discussions for membership details.
 
 ---
 

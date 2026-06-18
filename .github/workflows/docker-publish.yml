@@ -1,0 +1,72 @@
+name: Build and Push Docker Images
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - "README.md"
+      - "LICENSE"
+      - ".env.example"
+      - "ACTIVITY_TYPE_TEMPLATE.md"
+
+env:
+  REGISTRY: docker.io
+  IMAGE_BACKEND: joshuajeffreygimmel/lurastudy-backend
+  IMAGE_FRONTEND: joshuajeffreygimmel/lurastudy-frontend
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_HUB_USERNAME }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Generate image tags
+        id: tags
+        shell: bash
+        run: |
+          SHORT_SHA="${GITHUB_SHA::7}"
+          BRANCH="${GITHUB_REF_NAME}"
+
+          if [ "$BRANCH" = "main" ]; then
+            echo "BACKEND_TAGS=${{ env.IMAGE_BACKEND }}:latest,${{ env.IMAGE_BACKEND }}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "FRONTEND_TAGS=${{ env.IMAGE_FRONTEND }}:latest,${{ env.IMAGE_FRONTEND }}:${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          elif [ "$BRANCH" = "develop" ]; then
+            echo "BACKEND_TAGS=${{ env.IMAGE_BACKEND }}:early-access,${{ env.IMAGE_BACKEND }}:develop-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "FRONTEND_TAGS=${{ env.IMAGE_FRONTEND }}:early-access,${{ env.IMAGE_FRONTEND }}:develop-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          else
+            echo "BACKEND_TAGS=${{ env.IMAGE_BACKEND }}:${BRANCH}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+            echo "FRONTEND_TAGS=${{ env.IMAGE_FRONTEND }}:${BRANCH}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and push backend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.BACKEND_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ steps.tags.outputs.FRONTEND_TAGS }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
