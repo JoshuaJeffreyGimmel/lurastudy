@@ -32,8 +32,6 @@ function Write-Warn { Write-Host "  !! $($args[0])" -ForegroundColor Yellow }
 function Write-Err  { Write-Host "  XX $($args[0])" -ForegroundColor Red }
 
 function Invoke-Native {
-    # Run a native command safely, capturing output but NOT letting stderr
-    # trigger PowerShell's error handling.
     param([ScriptBlock]$ScriptBlock)
     $global:LASTEXITCODE = 0
     $output = & $ScriptBlock 2>&1
@@ -73,6 +71,75 @@ function Download-File($url, $output) {
     Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
 }
 
+function Set-CloudProvider($provider, $apiKey) {
+    $envContent = Get-Content ".env" -Raw
+    switch ($provider) {
+        "openai" {
+            $baseUrl = "https://api.openai.com/v1"
+            $model = "gpt-4o-mini"
+            $embedModel = "text-embedding-3-small"
+            $embedDims = "1536"
+        }
+        "groq" {
+            $baseUrl = "https://api.groq.com/openai/v1"
+            $model = "llama-3.3-70b-versatile"
+            $embedModel = "llama-3.3-70b-versatile"
+            $embedDims = "768"
+        }
+        "together" {
+            $baseUrl = "https://api.together.xyz/v1"
+            $model = "meta-llama/Llama-3.2-3B-Instruct-Turbo"
+            $embedModel = "thenlper/gte-base"
+            $embedDims = "768"
+        }
+        "deepseek" {
+            $baseUrl = "https://api.deepseek.com/v1"
+            $model = "deepseek-chat"
+            $embedModel = "deepseek-chat"
+            $embedDims = "1536"
+        }
+        "mistral" {
+            $baseUrl = "https://api.mistral.ai/v1"
+            $model = "mistral-small-latest"
+            $embedModel = "mistral-embed"
+            $embedDims = "1024"
+        }
+        "xai" {
+            $baseUrl = "https://api.x.ai/v1"
+            $model = "grok-2"
+            $embedModel = "grok-2"
+            $embedDims = "1536"
+        }
+        "openrouter" {
+            $baseUrl = "https://openrouter.ai/api/v1"
+            $model = "openai/gpt-4o-mini"
+            $embedModel = "openai/text-embedding-3-small"
+            $embedDims = "1536"
+        }
+        "custom" {
+            $baseUrl = $customUrl
+            $model = $customModel
+            $embedModel = $customEmbedModel
+            $embedDims = $customEmbedDims
+        }
+    }
+
+    $replaces = @{
+        "LLM_BASE_URL=.*" = "LLM_BASE_URL=$baseUrl"
+        "LLM_API_KEY=.*" = "LLM_API_KEY=$apiKey"
+        "LLM_MODEL=.*" = "LLM_MODEL=$model"
+        "EMBEDDING_BASE_URL=.*" = "EMBEDDING_BASE_URL=$baseUrl"
+        "EMBEDDING_API_KEY=.*" = "EMBEDDING_API_KEY=$apiKey"
+        "EMBEDDING_MODEL=.*" = "EMBEDDING_MODEL=$embedModel"
+        "EMBEDDING_DIMENSIONS=.*" = "EMBEDDING_DIMENSIONS=$embedDims"
+    }
+
+    foreach ($pattern in $replaces.Keys) {
+        $envContent = $envContent -replace $pattern, $replaces[$pattern]
+    }
+    Set-Content ".env" -Value $envContent
+}
+
 # ─── Main ────────────────────────────────────────────────────────────────────
 try {
     Show-Banner
@@ -102,7 +169,6 @@ try {
         Write-Warn "Docker is installed but not running."
         Write-Info "Attempting to start Docker Desktop automatically..."
         
-        # Try common Docker Desktop locations
         $dockerPaths = @(
             "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
             "${env:ProgramFiles(x86)}\Docker\Docker\Docker Desktop.exe",
@@ -154,7 +220,6 @@ try {
     Write-Info "Downloading configuration files..."
     Download-File "${RepoBase}/${ComposeFile}" $ComposeFile
     Download-File "${RepoBase}/${EnvExampleFile}" $EnvExampleFile
-    # Also download the init.sql for PostgreSQL (referenced by compose file)
     New-Item -ItemType Directory -Path "postgres" -Force | Out-Null
     Download-File "${RepoBase}/postgres/init.sql" "postgres/init.sql"
     Write-OK "Configuration files downloaded."
@@ -173,41 +238,56 @@ try {
     } else {
         Write-Info "How do you want to run the AI?"
         Write-Host "   1) Local - use Ollama (free, private, runs on your machine) [default]"
-        Write-Host "   2) Cloud - use OpenAI (no installation, ~`$2/month in API costs)"
+        Write-Host "   2) Cloud - use an API provider"
         Write-Host ""
         $aiChoice = Read-Host "  Choose [1/2]"
 
-        if ($aiChoice -eq "2" -or $aiChoice -eq "cloud" -or $aiChoice -eq "openai") {
+        if ($aiChoice -eq "2" -or $aiChoice -eq "cloud") {
             $useCloud = $true
         }
     }
 
     if ($useCloud) {
         Write-Host ""
-        Write-Info "Cloud AI selected."
-        Write-Host "  You'll need an OpenAI API key (https://platform.openai.com/api-keys)."
+        Write-Info "Select your LLM provider (all use OpenAI-compatible API):"
+        Write-Host "   1) OpenAI       - gpt-4o-mini"
+        Write-Host "   2) Groq         - llama-3.3-70b (free tier available)"
+        Write-Host "   3) Together AI  - Llama-3.2-3B-Instruct"
+        Write-Host "   4) DeepSeek     - deepseek-chat"
+        Write-Host "   5) Mistral AI   - mistral-small-latest"
+        Write-Host "   6) xAI (Grok)   - grok-2"
+        Write-Host "   7) OpenRouter   - any model (Claude, Gemini, GPT, etc.)"
+        Write-Host "   8) Custom       - enter your own endpoint"
         Write-Host ""
-        $apiKey = Read-Host "  Enter your OpenAI API key (sk-...)"
+        $providerChoice = Read-Host "  Choose [1-8]"
+
+        switch ($providerChoice) {
+            "1" { $provider = "openai" }
+            "2" { $provider = "groq" }
+            "3" { $provider = "together" }
+            "4" { $provider = "deepseek" }
+            "5" { $provider = "mistral" }
+            "6" { $provider = "xai" }
+            "7" { $provider = "openrouter" }
+            "8" { $provider = "custom" }
+            default { $provider = "openai" }
+        }
+
+        Write-Host ""
+        Write-Info "Provider selected: $provider"
+        $apiKey = Read-Host "  Enter your API key"
+
+        if ($provider -eq "custom") {
+            Write-Host ""
+            $customUrl = Read-Host "  Enter the LLM base URL (e.g. https://api.example.com/v1)"
+            $customModel = Read-Host "  Enter the model name (e.g. my-model)"
+            $customEmbedModel = Read-Host "  Enter the embedding model name (e.g. my-embed-model)"
+            $customEmbedDims = Read-Host "  Enter the embedding dimensions (e.g. 768)"
+        }
 
         if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
-            # Update .env with cloud settings
-            $envContent = Get-Content ".env" -Raw
-            
-            $replaces = @{
-                "LLM_BASE_URL=.*" = "LLM_BASE_URL=https://api.openai.com/v1"
-                "LLM_API_KEY=.*" = "LLM_API_KEY=$apiKey"
-                "LLM_MODEL=.*" = "LLM_MODEL=gpt-4o-mini"
-                "EMBEDDING_BASE_URL=.*" = "EMBEDDING_BASE_URL=https://api.openai.com/v1"
-                "EMBEDDING_API_KEY=.*" = "EMBEDDING_API_KEY=$apiKey"
-                "EMBEDDING_MODEL=.*" = "EMBEDDING_MODEL=text-embedding-3-small"
-                "EMBEDDING_DIMENSIONS=.*" = "EMBEDDING_DIMENSIONS=1536"
-            }
-
-            foreach ($pattern in $replaces.Keys) {
-                $envContent = $envContent -replace $pattern, $replaces[$pattern]
-            }
-            Set-Content ".env" -Value $envContent
-            Write-OK "OpenAI API key saved."
+            Set-CloudProvider $provider $apiKey
+            Write-OK "API key saved for $provider."
         } else {
             Write-Warn "No API key provided. You can configure it later in Settings."
         }
@@ -247,7 +327,6 @@ try {
             Write-Host ""
             Write-Host "     The app will still start, but AI features won't work until Ollama is set up."
         }
-
     }
 
     # ── Step 5: Clean up any previous LuraStudy containers ────────────────
@@ -310,9 +389,9 @@ try {
     Write-Host "    to create your admin account."
     Write-Host ""
 
-    # Open browser
+    # Open browser to register page
     try {
-        Start-Process "http://localhost:5173"
+        Start-Process "http://localhost:5173/register"
     } catch {}
 
     # Cleanup

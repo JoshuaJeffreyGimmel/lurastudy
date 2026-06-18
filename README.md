@@ -53,7 +53,8 @@ iwr -useb https://raw.githubusercontent.com/JoshuaJeffreyGimmel/lurastudy/main/i
 
 > That's it! The installer will check for Docker, download the configuration files, prompt
 > you to choose local or cloud AI, then pull the pre-built Docker images and start everything.
-> Your browser will open to **http://localhost:5173** when ready.
+> Your browser will open to **http://localhost:5173/register** when ready, where you can create
+> your admin account immediately.
 
 ### Step-by-step (manual)
 

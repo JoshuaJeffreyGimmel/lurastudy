@@ -80,6 +80,79 @@ download_file() {
     fi
 }
 
+set_cloud_provider() {
+    local provider="$1"
+    local api_key="$2"
+    case "$provider" in
+        openai)
+            local base_url="https://api.openai.com/v1"
+            local model="gpt-4o-mini"
+            local embed_model="text-embedding-3-small"
+            local embed_dims="1536"
+            ;;
+        groq)
+            local base_url="https://api.groq.com/openai/v1"
+            local model="llama-3.3-70b-versatile"
+            local embed_model="llama-3.3-70b-versatile"
+            local embed_dims="768"
+            ;;
+        together)
+            local base_url="https://api.together.xyz/v1"
+            local model="meta-llama/Llama-3.2-3B-Instruct-Turbo"
+            local embed_model="thenlper/gte-base"
+            local embed_dims="768"
+            ;;
+        deepseek)
+            local base_url="https://api.deepseek.com/v1"
+            local model="deepseek-chat"
+            local embed_model="deepseek-chat"
+            local embed_dims="1536"
+            ;;
+        mistral)
+            local base_url="https://api.mistral.ai/v1"
+            local model="mistral-small-latest"
+            local embed_model="mistral-embed"
+            local embed_dims="1024"
+            ;;
+        xai)
+            local base_url="https://api.x.ai/v1"
+            local model="grok-2"
+            local embed_model="grok-2"
+            local embed_dims="1536"
+            ;;
+        openrouter)
+            local base_url="https://openrouter.ai/api/v1"
+            local model="openai/gpt-4o-mini"
+            local embed_model="openai/text-embedding-3-small"
+            local embed_dims="1536"
+            ;;
+        custom)
+            local base_url="$custom_url"
+            local model="$custom_model"
+            local embed_model="$custom_embed_model"
+            local embed_dims="$custom_embed_dims"
+            ;;
+    esac
+
+    if [[ "$(uname -s)" == "Darwin" ]]; then
+        sed -i '' "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$base_url|" .env
+        sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+        sed -i '' "s|^LLM_MODEL=.*|LLM_MODEL=$model|" .env
+        sed -i '' "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$base_url|" .env
+        sed -i '' "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
+        sed -i '' "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$embed_model|" .env
+        sed -i '' "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$embed_dims|" .env
+    else
+        sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$base_url|" .env
+        sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+        sed -i "s|^LLM_MODEL=.*|LLM_MODEL=$model|" .env
+        sed -i "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$base_url|" .env
+        sed -i "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
+        sed -i "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$embed_model|" .env
+        sed -i "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$embed_dims|" .env
+    fi
+}
+
 # ─── Main ─────────────────────────────────────────────────────────────────────
 main() {
     print_banner
@@ -96,17 +169,12 @@ main() {
     }
     success "Docker is installed."
 
-    # Check Docker is running; if not, try to auto-start
     if ! docker info &>/dev/null; then
         warn "Docker is installed but not running."
         echo "  Attempting to start Docker automatically..."
         case "$(uname -s)" in
-            Darwin)
-                open -a Docker
-                ;;
-            Linux)
-                sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true
-                ;;
+            Darwin) open -a Docker ;;
+            Linux)  sudo systemctl start docker 2>/dev/null || sudo service docker start 2>/dev/null || true ;;
         esac
         info "Waiting for Docker to start (this can take up to 2 minutes)..."
         for i in $(seq 1 24); do
@@ -130,7 +198,6 @@ main() {
     info "Downloading configuration files..."
     download_file "${REPO_BASE}/${COMPOSE_FILE}" "${COMPOSE_FILE}"
     download_file "${REPO_BASE}/${ENV_FILE}" "${ENV_FILE}"
-    # Also download the init.sql for PostgreSQL (referenced by compose file)
     mkdir -p postgres
     download_file "${REPO_BASE}/postgres/init.sql" "postgres/init.sql"
     success "Configuration files downloaded."
@@ -148,43 +215,56 @@ main() {
     else
         info "How do you want to run the AI?"
         echo "   1) Local — use Ollama (free, private, runs on your machine) [default]"
-        echo "   2) Cloud — use OpenAI (no installation, ~\$2/month in API costs)"
+        echo "   2) Cloud — use an API provider"
         echo ""
         read -r -p "  Choose [1/2]: " ai_choice
-
         case "$ai_choice" in
-            2|cloud|Cloud|openai|OpenAI) USE_CLOUD=true ;;
+            2|cloud) USE_CLOUD=true ;;
             *) USE_CLOUD=false ;;
         esac
     fi
 
     if [ "$USE_CLOUD" = true ]; then
         echo ""
-        info "Cloud AI selected."
-        echo "  You'll need an OpenAI API key (https://platform.openai.com/api-keys)."
+        info "Select your LLM provider (all use OpenAI-compatible API):"
+        echo "   1) OpenAI       - gpt-4o-mini"
+        echo "   2) Groq         - llama-3.3-70b (free tier available)"
+        echo "   3) Together AI  - Llama-3.2-3B-Instruct"
+        echo "   4) DeepSeek     - deepseek-chat"
+        echo "   5) Mistral AI   - mistral-small-latest"
+        echo "   6) xAI (Grok)   - grok-2"
+        echo "   7) OpenRouter   - any model (Claude, Gemini, GPT, etc.)"
+        echo "   8) Custom       - enter your own endpoint"
         echo ""
-        read -r -p "  Enter your OpenAI API key (sk-...): " api_key
+        read -r -p "  Choose [1-8]: " provider_choice
+
+        case "$provider_choice" in
+            1) provider="openai" ;;
+            2) provider="groq" ;;
+            3) provider="together" ;;
+            4) provider="deepseek" ;;
+            5) provider="mistral" ;;
+            6) provider="xai" ;;
+            7) provider="openrouter" ;;
+            8) provider="custom" ;;
+            *) provider="openai" ;;
+        esac
+
+        echo ""
+        info "Provider selected: $provider"
+        read -r -p "  Enter your API key: " api_key
+
+        if [ "$provider" = "custom" ]; then
+            echo ""
+            read -r -p "  Enter the LLM base URL (e.g. https://api.example.com/v1): " custom_url
+            read -r -p "  Enter the model name (e.g. my-model): " custom_model
+            read -r -p "  Enter the embedding model name (e.g. my-embed-model): " custom_embed_model
+            read -r -p "  Enter the embedding dimensions (e.g. 768): " custom_embed_dims
+        fi
 
         if [ -n "$api_key" ]; then
-            # Update .env with cloud settings
-            if [[ "$(uname -s)" == "Darwin" ]]; then
-                sed -i '' "s|^LLM_BASE_URL=.*|LLM_BASE_URL=https://api.openai.com/v1|" .env
-                sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
-                sed -i '' "s|^LLM_MODEL=.*|LLM_MODEL=gpt-4o-mini|" .env
-                sed -i '' "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=https://api.openai.com/v1|" .env
-                sed -i '' "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
-                sed -i '' "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=text-embedding-3-small|" .env
-                sed -i '' "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=1536|" .env
-            else
-                sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=https://api.openai.com/v1|" .env
-                sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
-                sed -i "s|^LLM_MODEL=.*|LLM_MODEL=gpt-4o-mini|" .env
-                sed -i "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=https://api.openai.com/v1|" .env
-                sed -i "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
-                sed -i "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=text-embedding-3-small|" .env
-                sed -i "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=1536|" .env
-            fi
-            success "OpenAI API key saved."
+            set_cloud_provider "$provider" "$api_key"
+            success "API key saved for $provider."
         else
             warn "No API key provided. You can configure it later in Settings."
         fi
@@ -227,17 +307,19 @@ main() {
     echo ""
     info "Pulling Docker images..."
     docker compose pull 2>&1 || {
-        warn "Pull failed. Make sure you have internet access."
-        exit 1
+        warn "Pull failed, but continuing anyway (images may already be cached)..."
     }
     success "Docker images pulled."
 
     echo ""
     info "Starting LuraStudy..."
     docker compose up -d 2>&1 || {
-        error "Failed to start LuraStudy."
-        echo "  Run 'docker compose logs' to see what went wrong."
-        exit 1
+        warn "'docker compose up -d' failed. Trying with local build..."
+        docker compose up --build -d 2>&1 || {
+            error "Failed to start LuraStudy."
+            echo "  Run 'docker compose logs' to see what went wrong."
+            exit 1
+        }
     }
 
     # ── Step 6: Success ────────────────────────────────────────────────────
@@ -256,8 +338,8 @@ main() {
 
     # Try to open browser
     case "$(uname -s)" in
-        Darwin) open http://localhost:5173 2>/dev/null || true ;;
-        Linux)  xdg-open http://localhost:5173 2>/dev/null || true ;;
+        Darwin) open http://localhost:5173/register 2>/dev/null || true ;;
+        Linux)  xdg-open http://localhost:5173/register 2>/dev/null || true ;;
     esac
 
     # Cleanup

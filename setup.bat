@@ -128,35 +128,66 @@ REM ─── Ask local vs cloud ───────────────�
 echo.
 echo  How do you want to run the AI?
 echo    1) Local -- use Ollama (free, private, runs on your machine)
-echo    2) Cloud -- use OpenAI (no installation, ~$2/month in API costs)
+echo    2) Cloud -- use an API provider
 echo.
 set /p ai_choice="  Choose [1/2]: "
 
 set USE_CLOUD=false
 if "%ai_choice%"=="2" set USE_CLOUD=true
 if /i "%ai_choice%"=="cloud" set USE_CLOUD=true
-if /i "%ai_choice%"=="openai" set USE_CLOUD=true
 
 if "%USE_CLOUD%"=="true" (
     echo.
-    echo  [INFO] Cloud AI selected.
-    echo  You'll need an OpenAI API key (https://platform.openai.com/api-keys).
+    echo  Select your LLM provider:
+    echo    1) OpenAI       - gpt-4o-mini
+    echo    2) Groq         - llama-3.3-70b (free tier available)
+    echo    3) Together AI  - Llama-3.2-3B-Instruct
+    echo    4) DeepSeek     - deepseek-chat
+    echo    5) Mistral AI   - mistral-small-latest
+    echo    6) xAI (Grok)   - grok-2
+    echo    7) OpenRouter   - any model (Claude, Gemini, GPT, etc.)
+    echo    8) Custom       - enter your own endpoint
     echo.
-    set /p api_key="  Enter your OpenAI API key (sk-...): "
+    set /p prov_choice="  Choose [1-8]: "
+
+    if "%prov_choice%"=="1" set LLM_URL=https://api.openai.com/v1& set LLM_MODEL=gpt-4o-mini& set EMBED_MODEL=text-embedding-3-small& set EMBED_DIMS=1536
+    if "%prov_choice%"=="2" set LLM_URL=https://api.groq.com/openai/v1& set LLM_MODEL=llama-3.3-70b-versatile& set EMBED_MODEL=llama-3.3-70b-versatile& set EMBED_DIMS=768
+    if "%prov_choice%"=="3" set LLM_URL=https://api.together.xyz/v1& set LLM_MODEL=meta-llama/Llama-3.2-3B-Instruct-Turbo& set EMBED_MODEL=thenlper/gte-base& set EMBED_DIMS=768
+    if "%prov_choice%"=="4" set LLM_URL=https://api.deepseek.com/v1& set LLM_MODEL=deepseek-chat& set EMBED_MODEL=deepseek-chat& set EMBED_DIMS=1536
+    if "%prov_choice%"=="5" set LLM_URL=https://api.mistral.ai/v1& set LLM_MODEL=mistral-small-latest& set EMBED_MODEL=mistral-embed& set EMBED_DIMS=1024
+    if "%prov_choice%"=="6" set LLM_URL=https://api.x.ai/v1& set LLM_MODEL=grok-2& set EMBED_MODEL=grok-2& set EMBED_DIMS=1536
+    if "%prov_choice%"=="7" set LLM_URL=https://openrouter.ai/api/v1& set LLM_MODEL=openai/gpt-4o-mini& set EMBED_MODEL=openai/text-embedding-3-small& set EMBED_DIMS=1536
+
+    if "%prov_choice%"=="8" (
+        echo.
+        set /p LLM_URL="  Enter the LLM base URL (e.g. https://api.example.com/v1): "
+        set /p LLM_MODEL="  Enter the model name (e.g. my-model): "
+        set /p EMBED_MODEL="  Enter the embedding model name (e.g. my-embed-model): "
+        set /p EMBED_DIMS="  Enter the embedding dimensions (e.g. 768): "
+    )
+
+    if not defined LLM_URL (
+        set LLM_URL=https://api.openai.com/v1
+        set LLM_MODEL=gpt-4o-mini
+        set EMBED_MODEL=text-embedding-3-small
+        set EMBED_DIMS=1536
+    )
+
+    echo.
+    set /p api_key="  Enter your API key: "
 
     if not "!api_key!"=="" (
-        REM Update .env with cloud settings using pure batch (no PowerShell needed)
-        REM Filter out old LLM and EMBEDDING lines, then append new cloud values
+        REM Update .env with cloud settings
         findstr /b /v "LLM_BASE_URL LLM_API_KEY LLM_MODEL EMBEDDING_BASE_URL EMBEDDING_API_KEY EMBEDDING_MODEL EMBEDDING_DIMENSIONS" .env > .env.tmp
-        echo LLM_BASE_URL=https://api.openai.com/v1 >> .env.tmp
+        echo LLM_BASE_URL=!LLM_URL! >> .env.tmp
         echo LLM_API_KEY=!api_key! >> .env.tmp
-        echo LLM_MODEL=gpt-4o-mini >> .env.tmp
-        echo EMBEDDING_BASE_URL=https://api.openai.com/v1 >> .env.tmp
+        echo LLM_MODEL=!LLM_MODEL! >> .env.tmp
+        echo EMBEDDING_BASE_URL=!LLM_URL! >> .env.tmp
         echo EMBEDDING_API_KEY=!api_key! >> .env.tmp
-        echo EMBEDDING_MODEL=text-embedding-3-small >> .env.tmp
-        echo EMBEDDING_DIMENSIONS=1536 >> .env.tmp
+        echo EMBEDDING_MODEL=!EMBED_MODEL! >> .env.tmp
+        echo EMBEDDING_DIMENSIONS=!EMBED_DIMS! >> .env.tmp
         move /y .env.tmp .env >nul
-        echo  [OK] OpenAI API key saved.
+        echo  [OK] API key saved.
     ) else (
         echo  [WARN] No API key provided. You can configure it later in Settings.
     )

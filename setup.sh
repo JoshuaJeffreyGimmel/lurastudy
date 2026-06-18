@@ -125,32 +125,59 @@ main() {
 
     if [ "$USE_CLOUD" = true ]; then
         echo ""
-        info "Cloud AI selected."
-        echo "  You'll need an OpenAI API key (https://platform.openai.com/api-keys)."
-        echo "  This costs roughly \$0.01–\$0.05 per study session."
+        info "Select your LLM provider (all use OpenAI-compatible API):"
+        echo "   1) OpenAI       - gpt-4o-mini"
+        echo "   2) Groq         - llama-3.3-70b (free tier available)"
+        echo "   3) Together AI  - Llama-3.2-3B-Instruct"
+        echo "   4) DeepSeek     - deepseek-chat"
+        echo "   5) Mistral AI   - mistral-small-latest"
+        echo "   6) xAI (Grok)   - grok-2"
+        echo "   7) OpenRouter   - any model (Claude, Gemini, GPT, etc.)"
+        echo "   8) Custom       - enter your own endpoint"
         echo ""
-        read -r -p "  Enter your OpenAI API key (sk-...): " api_key
+        read -r -p "  Choose [1-8]: " prov_choice
+
+        case "$prov_choice" in
+            1) LLM_URL="https://api.openai.com/v1";     LLM_MODEL="gpt-4o-mini";           EMBED_MODEL="text-embedding-3-small";           EMBED_DIMS="1536" ;;
+            2) LLM_URL="https://api.groq.com/openai/v1"; LLM_MODEL="llama-3.3-70b-versatile"; EMBED_MODEL="llama-3.3-70b-versatile";          EMBED_DIMS="768" ;;
+            3) LLM_URL="https://api.together.xyz/v1";   LLM_MODEL="meta-llama/Llama-3.2-3B-Instruct-Turbo"; EMBED_MODEL="thenlper/gte-base";        EMBED_DIMS="768" ;;
+            4) LLM_URL="https://api.deepseek.com/v1";   LLM_MODEL="deepseek-chat";          EMBED_MODEL="deepseek-chat";                    EMBED_DIMS="1536" ;;
+            5) LLM_URL="https://api.mistral.ai/v1";     LLM_MODEL="mistral-small-latest";   EMBED_MODEL="mistral-embed";                    EMBED_DIMS="1024" ;;
+            6) LLM_URL="https://api.x.ai/v1";           LLM_MODEL="grok-2";                 EMBED_MODEL="grok-2";                           EMBED_DIMS="1536" ;;
+            7) LLM_URL="https://openrouter.ai/api/v1";  LLM_MODEL="openai/gpt-4o-mini";     EMBED_MODEL="openai/text-embedding-3-small";    EMBED_DIMS="1536" ;;
+            8)
+                echo ""
+                read -r -p "  Enter the LLM base URL (e.g. https://api.example.com/v1): " LLM_URL
+                read -r -p "  Enter the model name (e.g. my-model): " LLM_MODEL
+                read -r -p "  Enter the embedding model name (e.g. my-embed-model): " EMBED_MODEL
+                read -r -p "  Enter the embedding dimensions (e.g. 768): " EMBED_DIMS
+                ;;
+            *)
+                LLM_URL="https://api.openai.com/v1";    LLM_MODEL="gpt-4o-mini";           EMBED_MODEL="text-embedding-3-small";           EMBED_DIMS="1536" ;;
+        esac
+
+        echo ""
+        read -r -p "  Enter your API key: " api_key
 
         if [ -n "$api_key" ]; then
-            # Update .env with cloud settings
             if [[ "$OSTYPE" == "darwin"* ]]; then
-                sed -i '' "s|^LLM_BASE_URL=.*|LLM_BASE_URL=https://api.openai.com/v1|" .env
+                sed -i '' "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$LLM_URL|" .env
                 sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
-                sed -i '' "s|^LLM_MODEL=.*|LLM_MODEL=gpt-4o-mini|" .env
-                sed -i '' "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=https://api.openai.com/v1|" .env
+                sed -i '' "s|^LLM_MODEL=.*|LLM_MODEL=$LLM_MODEL|" .env
+                sed -i '' "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$LLM_URL|" .env
                 sed -i '' "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
-                sed -i '' "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=text-embedding-3-small|" .env
-                sed -i '' "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=1536|" .env
+                sed -i '' "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$EMBED_MODEL|" .env
+                sed -i '' "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$EMBED_DIMS|" .env
             else
-                sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=https://api.openai.com/v1|" .env
+                sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$LLM_URL|" .env
                 sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
-                sed -i "s|^LLM_MODEL=.*|LLM_MODEL=gpt-4o-mini|" .env
-                sed -i "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=https://api.openai.com/v1|" .env
+                sed -i "s|^LLM_MODEL=.*|LLM_MODEL=$LLM_MODEL|" .env
+                sed -i "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$LLM_URL|" .env
                 sed -i "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
-                sed -i "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=text-embedding-3-small|" .env
-                sed -i "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=1536|" .env
+                sed -i "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$EMBED_MODEL|" .env
+                sed -i "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$EMBED_DIMS|" .env
             fi
-            success "OpenAI API key saved."
+            success "API key saved."
         else
             warn "No API key provided. You can configure it later in Settings."
         fi
