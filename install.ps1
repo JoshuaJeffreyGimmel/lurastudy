@@ -23,6 +23,7 @@ $RepoName = "lurastudy"
 $RepoBranch = "main"
 $RepoBase = "https://raw.githubusercontent.com/${RepoOwner}/${RepoName}/${RepoBranch}"
 $ComposeFile = "docker-compose.yml"
+$ComposeCloudFile = "docker-compose.cloud.yml"
 $EnvExampleFile = ".env.example"
 $InstallDir = Join-Path $env:USERPROFILE "lurastudy"
 
@@ -70,75 +71,6 @@ function Test-Command($cmd) {
 function Download-File($url, $output) {
     Write-Info "Downloading $output..."
     Invoke-WebRequest -Uri $url -OutFile $output -UseBasicParsing
-}
-
-function Set-CloudProvider($provider, $apiKey) {
-    $envContent = Get-Content ".env" -Raw
-    switch ($provider) {
-        "openai" {
-            $baseUrl = "https://api.openai.com/v1"
-            $model = "gpt-4o-mini"
-            $embedModel = "text-embedding-3-small"
-            $embedDims = "1536"
-        }
-        "groq" {
-            $baseUrl = "https://api.groq.com/openai/v1"
-            $model = "llama-3.3-70b-versatile"
-            $embedModel = "llama-3.3-70b-versatile"
-            $embedDims = "768"
-        }
-        "together" {
-            $baseUrl = "https://api.together.xyz/v1"
-            $model = "meta-llama/Llama-3.2-3B-Instruct-Turbo"
-            $embedModel = "thenlper/gte-base"
-            $embedDims = "768"
-        }
-        "deepseek" {
-            $baseUrl = "https://api.deepseek.com/v1"
-            $model = "deepseek-chat"
-            $embedModel = "deepseek-chat"
-            $embedDims = "1536"
-        }
-        "mistral" {
-            $baseUrl = "https://api.mistral.ai/v1"
-            $model = "mistral-small-latest"
-            $embedModel = "mistral-embed"
-            $embedDims = "1024"
-        }
-        "xai" {
-            $baseUrl = "https://api.x.ai/v1"
-            $model = "grok-2"
-            $embedModel = "grok-2"
-            $embedDims = "1536"
-        }
-        "openrouter" {
-            $baseUrl = "https://openrouter.ai/api/v1"
-            $model = "openai/gpt-4o-mini"
-            $embedModel = "openai/text-embedding-3-small"
-            $embedDims = "1536"
-        }
-        "custom" {
-            $baseUrl = $customUrl
-            $model = $customModel
-            $embedModel = $customEmbedModel
-            $embedDims = $customEmbedDims
-        }
-    }
-
-    $replaces = @{
-        "LLM_BASE_URL=.*" = "LLM_BASE_URL=$baseUrl"
-        "LLM_API_KEY=.*" = "LLM_API_KEY=$apiKey"
-        "LLM_MODEL=.*" = "LLM_MODEL=$model"
-        "EMBEDDING_BASE_URL=.*" = "EMBEDDING_BASE_URL=$baseUrl"
-        "EMBEDDING_API_KEY=.*" = "EMBEDDING_API_KEY=$apiKey"
-        "EMBEDDING_MODEL=.*" = "EMBEDDING_MODEL=$embedModel"
-        "EMBEDDING_DIMENSIONS=.*" = "EMBEDDING_DIMENSIONS=$embedDims"
-    }
-
-    foreach ($pattern in $replaces.Keys) {
-        $envContent = $envContent -replace $pattern, $replaces[$pattern]
-    }
-    Set-Content ".env" -Value $envContent
 }
 
 # ─── Main ────────────────────────────────────────────────────────────────────
@@ -246,6 +178,9 @@ try {
     }
 
     if ($useCloud) {
+        # Download the cloud compose override file
+        Download-File "${RepoBase}/${ComposeCloudFile}" $ComposeCloudFile
+
         Write-Host ""
         Write-Info "Select your LLM provider (all use OpenAI-compatible API):"
         Write-Host "   1) OpenAI       - gpt-4o-mini"
@@ -284,7 +219,74 @@ try {
         }
 
         if (-not [string]::IsNullOrWhiteSpace($apiKey)) {
-            Set-CloudProvider $provider $apiKey
+            # Update .env with provider settings directly here (not in a function)
+            $envContent = Get-Content ".env" -Raw
+
+            switch ($provider) {
+                "openai" {
+                    $baseUrl = "https://api.openai.com/v1"
+                    $model = "gpt-4o-mini"
+                    $embedModel = "text-embedding-3-small"
+                    $embedDims = "1536"
+                }
+                "groq" {
+                    $baseUrl = "https://api.groq.com/openai/v1"
+                    $model = "llama-3.3-70b-versatile"
+                    $embedModel = "llama-3.3-70b-versatile"
+                    $embedDims = "768"
+                }
+                "together" {
+                    $baseUrl = "https://api.together.xyz/v1"
+                    $model = "meta-llama/Llama-3.2-3B-Instruct-Turbo"
+                    $embedModel = "thenlper/gte-base"
+                    $embedDims = "768"
+                }
+                "deepseek" {
+                    $baseUrl = "https://api.deepseek.com/v1"
+                    $model = "deepseek-chat"
+                    $embedModel = "deepseek-chat"
+                    $embedDims = "1536"
+                }
+                "mistral" {
+                    $baseUrl = "https://api.mistral.ai/v1"
+                    $model = "mistral-small-latest"
+                    $embedModel = "mistral-embed"
+                    $embedDims = "1024"
+                }
+                "xai" {
+                    $baseUrl = "https://api.x.ai/v1"
+                    $model = "grok-2"
+                    $embedModel = "grok-2"
+                    $embedDims = "1536"
+                }
+                "openrouter" {
+                    $baseUrl = "https://openrouter.ai/api/v1"
+                    $model = "openai/gpt-4o-mini"
+                    $embedModel = "openai/text-embedding-3-small"
+                    $embedDims = "1536"
+                }
+                "custom" {
+                    $baseUrl = $customUrl
+                    $model = $customModel
+                    $embedModel = $customEmbedModel
+                    $embedDims = $customEmbedDims
+                }
+            }
+
+            $replaces = @{
+                "LLM_BASE_URL=.*" = "LLM_BASE_URL=$baseUrl"
+                "LLM_API_KEY=.*" = "LLM_API_KEY=$apiKey"
+                "LLM_MODEL=.*" = "LLM_MODEL=$model"
+                "EMBEDDING_BASE_URL=.*" = "EMBEDDING_BASE_URL=$baseUrl"
+                "EMBEDDING_API_KEY=.*" = "EMBEDDING_API_KEY=$apiKey"
+                "EMBEDDING_MODEL=.*" = "EMBEDDING_MODEL=$embedModel"
+                "EMBEDDING_DIMENSIONS=.*" = "EMBEDDING_DIMENSIONS=$embedDims"
+            }
+
+            foreach ($pattern in $replaces.Keys) {
+                $envContent = $envContent -replace $pattern, $replaces[$pattern]
+            }
+            Set-Content ".env" -Value $envContent
             Write-OK "API key saved for $provider."
         } else {
             Write-Warn "No API key provided. You can configure it later in Settings."
@@ -365,10 +367,15 @@ try {
             $upResult = Invoke-Native { docker compose up --build -d }
         }
         if ($global:LASTEXITCODE -ne 0) {
-            Write-Err "Failed to start LuraStudy."
-            Write-Host "  Last error output: $($upResult -join ' ')"
-            Pop-Location
-            exit 1
+            # If all else fails, just try basic docker compose up -d without cloud profile
+            Write-Warn "Build also failed. Trying basic 'docker compose up -d'..."
+            $upResult = Invoke-Native { docker compose up -d }
+            if ($global:LASTEXITCODE -ne 0) {
+                Write-Err "Failed to start LuraStudy."
+                Write-Host "  Last error output: $($upResult -join ' ')"
+                Pop-Location
+                exit 1
+            }
         }
     }
 

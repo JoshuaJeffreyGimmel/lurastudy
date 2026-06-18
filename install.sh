@@ -227,6 +227,9 @@ main() {
     fi
 
     if [ "$USE_CLOUD" = true ]; then
+        # Download the cloud compose override file
+        download_file "${REPO_BASE}/docker-compose.cloud.yml" "docker-compose.cloud.yml"
+
         echo ""
         info "Select your LLM provider (all use OpenAI-compatible API):"
         echo "   1) OpenAI       - gpt-4o-mini"
@@ -265,7 +268,75 @@ main() {
         fi
 
         if [ -n "$api_key" ]; then
-            set_cloud_provider "$provider" "$api_key"
+            # Set provider configs directly (avoids variable scoping issues with functions)
+            case "$provider" in
+                openai)
+                    local base_url="https://api.openai.com/v1"
+                    local model="gpt-4o-mini"
+                    local embed_model="text-embedding-3-small"
+                    local embed_dims="1536"
+                    ;;
+                groq)
+                    local base_url="https://api.groq.com/openai/v1"
+                    local model="llama-3.3-70b-versatile"
+                    local embed_model="llama-3.3-70b-versatile"
+                    local embed_dims="768"
+                    ;;
+                together)
+                    local base_url="https://api.together.xyz/v1"
+                    local model="meta-llama/Llama-3.2-3B-Instruct-Turbo"
+                    local embed_model="thenlper/gte-base"
+                    local embed_dims="768"
+                    ;;
+                deepseek)
+                    local base_url="https://api.deepseek.com/v1"
+                    local model="deepseek-chat"
+                    local embed_model="deepseek-chat"
+                    local embed_dims="1536"
+                    ;;
+                mistral)
+                    local base_url="https://api.mistral.ai/v1"
+                    local model="mistral-small-latest"
+                    local embed_model="mistral-embed"
+                    local embed_dims="1024"
+                    ;;
+                xai)
+                    local base_url="https://api.x.ai/v1"
+                    local model="grok-2"
+                    local embed_model="grok-2"
+                    local embed_dims="1536"
+                    ;;
+                openrouter)
+                    local base_url="https://openrouter.ai/api/v1"
+                    local model="openai/gpt-4o-mini"
+                    local embed_model="openai/text-embedding-3-small"
+                    local embed_dims="1536"
+                    ;;
+                custom)
+                    local base_url="$custom_url"
+                    local model="$custom_model"
+                    local embed_model="$custom_embed_model"
+                    local embed_dims="$custom_embed_dims"
+                    ;;
+            esac
+
+            if [[ "$(uname -s)" == "Darwin" ]]; then
+                sed -i '' "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$base_url|" .env
+                sed -i '' "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+                sed -i '' "s|^LLM_MODEL=.*|LLM_MODEL=$model|" .env
+                sed -i '' "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$base_url|" .env
+                sed -i '' "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
+                sed -i '' "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$embed_model|" .env
+                sed -i '' "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$embed_dims|" .env
+            else
+                sed -i "s|^LLM_BASE_URL=.*|LLM_BASE_URL=$base_url|" .env
+                sed -i "s|^LLM_API_KEY=.*|LLM_API_KEY=$api_key|" .env
+                sed -i "s|^LLM_MODEL=.*|LLM_MODEL=$model|" .env
+                sed -i "s|^EMBEDDING_BASE_URL=.*|EMBEDDING_BASE_URL=$base_url|" .env
+                sed -i "s|^EMBEDDING_API_KEY=.*|EMBEDDING_API_KEY=$api_key|" .env
+                sed -i "s|^EMBEDDING_MODEL=.*|EMBEDDING_MODEL=$embed_model|" .env
+                sed -i "s|^EMBEDDING_DIMENSIONS=.*|EMBEDDING_DIMENSIONS=$embed_dims|" .env
+            fi
             success "API key saved for $provider."
         else
             warn "No API key provided. You can configure it later in Settings."
