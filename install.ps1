@@ -339,11 +339,7 @@ try {
     # ── Step 6: Pull Docker images ─────────────────────────────────────────
     Write-Host ""
     Write-Info "Pulling Docker images..."
-    if ($useCloud) {
-        $pullResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml pull }
-    } else {
-        $pullResult = Invoke-Native { docker compose pull }
-    }
+    $pullResult = Invoke-Native { docker compose pull }
     if ($global:LASTEXITCODE -ne 0) {
         Write-Warn "Pull failed, but continuing anyway (images may already be cached)..."
     } else {
@@ -351,31 +347,21 @@ try {
     }
 
     # ── Step 7: Start Docker Compose ───────────────────────────────────────
+    # Note: .env already has the correct provider settings from Step 4.
+    # docker-compose.cloud.yml is NOT used because it hardcodes OpenAI values
+    # which would override .env. The user can manually add it if needed.
     Write-Host ""
     Write-Info "Starting LuraStudy..."
-    if ($useCloud) {
-        $upResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d }
-    } else {
-        $upResult = Invoke-Native { docker compose up -d }
-    }
+    $upResult = Invoke-Native { docker compose up -d }
     if ($global:LASTEXITCODE -ne 0) {
         Write-Warn "'docker compose up -d' failed."
         Write-Info "Trying with local build instead..."
-        if ($useCloud) {
-            $upResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml up --build -d }
-        } else {
-            $upResult = Invoke-Native { docker compose up --build -d }
-        }
+        $upResult = Invoke-Native { docker compose up --build -d }
         if ($global:LASTEXITCODE -ne 0) {
-            # If all else fails, just try basic docker compose up -d without cloud profile
-            Write-Warn "Build also failed. Trying basic 'docker compose up -d'..."
-            $upResult = Invoke-Native { docker compose up -d }
-            if ($global:LASTEXITCODE -ne 0) {
-                Write-Err "Failed to start LuraStudy."
-                Write-Host "  Last error output: $($upResult -join ' ')"
-                Pop-Location
-                exit 1
-            }
+            Write-Err "Failed to start LuraStudy."
+            Write-Host "  Last error output: $($upResult -join ' ')"
+            Pop-Location
+            exit 1
         }
     }
 

@@ -377,6 +377,9 @@ main() {
     fi
 
     # ── Step 5: Pull Docker images and start ──────────────────────────────
+    # Note: .env already has the correct provider settings from Step 4.
+    # docker-compose.cloud.yml is NOT used because it hardcodes OpenAI values
+    # which would override .env. The user can manually add it if needed.
     echo ""
     info "Pulling Docker images..."
     docker compose pull 2>&1 || {
