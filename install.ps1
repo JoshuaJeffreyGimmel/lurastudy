@@ -17,8 +17,6 @@ param(
     [switch]$Defaults = $false
 )
 
-$ErrorActionPreference = "Stop"
-
 # ─── Config ──────────────────────────────────────────────────────────────────
 $RepoOwner = "JoshuaJeffreyGimmel"
 $RepoName = "lurastudy"
@@ -28,10 +26,27 @@ $ComposeFile = "docker-compose.yml"
 $EnvExampleFile = ".env.example"
 
 # ─── Helper functions ────────────────────────────────────────────────────────
-function Write-Info  { Write-Host "  → $($args[0])" -ForegroundColor Cyan }
-function Write-OK   { Write-Host "  ✓ $($args[0])" -ForegroundColor Green }
-function Write-Warn { Write-Host "  ⚠ $($args[0])" -ForegroundColor Yellow }
-function Write-Err  { Write-Host "  ✗ $($args[0])" -ForegroundColor Red }
+function Write-Info  { Write-Host "  -> $($args[0])" -ForegroundColor Cyan }
+function Write-OK   { Write-Host "  OK $($args[0])" -ForegroundColor Green }
+function Write-Warn { Write-Host "  !! $($args[0])" -ForegroundColor Yellow }
+function Write-Err  { Write-Host "  XX $($args[0])" -ForegroundColor Red }
+
+function Invoke-Native {
+    # Run a native command safely, capturing output but NOT letting stderr
+    # trigger PowerShell's error handling.
+    param([ScriptBlock]$ScriptBlock)
+    $global:LASTEXITCODE = 0
+    $output = & $ScriptBlock 2>&1
+    $result = @()
+    foreach ($line in $output) {
+        if ($line -is [System.Management.Automation.ErrorRecord]) {
+            $result += "$line"
+        } else {
+            $result += $line
+        }
+    }
+    $result
+}
 
 function Show-Banner {
     Clear-Host
@@ -44,7 +59,7 @@ function Show-Banner {
     Write-Host "  \_____(_)_|  \___|\__,_| |_____|_|_| |_|___/" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "Local-first AI study assistant" -ForegroundColor White
-    Write-Host "One-command installer — v0.1.0" -ForegroundColor Yellow
+    Write-Host "One-command installer - v0.1.0" -ForegroundColor Yellow
     Write-Host ""
 }
 
@@ -72,16 +87,16 @@ try {
     if (-not (Test-Command docker)) {
         Write-Err "Docker is not installed."
         Write-Host "     Install Docker Desktop: https://www.docker.com/products/docker-desktop/"
+        Pop-Location
+        Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
         exit 1
     }
     Write-OK "Docker is installed."
 
     # Check Docker is running
     $dockerRunning = $false
-    try {
-        $info = docker info 2>&1
-        if ($LASTEXITCODE -eq 0) { $dockerRunning = $true }
-    } catch {}
+    $dockerInfo = Invoke-Native { docker info }
+    if ($global:LASTEXITCODE -eq 0) { $dockerRunning = $true }
 
     if (-not $dockerRunning) {
         Write-Warn "Docker is installed but not running."
@@ -108,24 +123,26 @@ try {
             $maxAttempts = 24
             for ($i = 1; $i -le $maxAttempts; $i++) {
                 Start-Sleep -Seconds 5
-                try {
-                    $info = docker info 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-OK "Docker Desktop is now running."
-                        $dockerRunning = $true
-                        break
-                    }
-                } catch {}
+                $dockerInfo = Invoke-Native { docker info }
+                if ($global:LASTEXITCODE -eq 0) {
+                    Write-OK "Docker Desktop is now running."
+                    $dockerRunning = $true
+                    break
+                }
             }
         } else {
             Write-Err "Could not find Docker Desktop executable."
             Write-Host "     Please start Docker Desktop manually and run the installer again."
+            Pop-Location
+            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
             exit 1
         }
 
         if (-not $dockerRunning) {
             Write-Err "Docker Desktop did not start within 2 minutes."
             Write-Host "     Please start Docker Desktop manually and run the installer again."
+            Pop-Location
+            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
             exit 1
         }
     } else {
@@ -137,6 +154,9 @@ try {
     Write-Info "Downloading configuration files..."
     Download-File "${RepoBase}/${ComposeFile}" $ComposeFile
     Download-File "${RepoBase}/${EnvExampleFile}" $EnvExampleFile
+    # Also download the init.sql for PostgreSQL (referenced by compose file)
+    New-Item -ItemType Directory -Path "postgres" -Force | Out-Null
+    Download-File "${RepoBase}/postgres/init.sql" "postgres/init.sql"
     Write-OK "Configuration files downloaded."
 
     # ── Step 3: Create .env ─────────────────────────────────────────────────
@@ -152,8 +172,8 @@ try {
         $useCloud = $false
     } else {
         Write-Info "How do you want to run the AI?"
-        Write-Host "   1) Local — use Ollama (free, private, runs on your machine) [default]"
-        Write-Host "   2) Cloud — use OpenAI (no installation, ~`$2/month in API costs)"
+        Write-Host "   1) Local - use Ollama (free, private, runs on your machine) [default]"
+        Write-Host "   2) Cloud - use OpenAI (no installation, ~`$2/month in API costs)"
         Write-Host ""
         $aiChoice = Read-Host "  Choose [1/2]"
 
@@ -192,8 +212,6 @@ try {
             Write-Warn "No API key provided. You can configure it later in Settings."
         }
 
-        # Use cloud compose profile
-        $ComposeCmd = "docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d"
     } else {
         # Local AI — check Ollama
         Write-Host ""
@@ -204,21 +222,21 @@ try {
             Write-Host ""
             Write-Info "Checking AI models (this may take a minute)..."
             
-            $models = ollama list 2>$null
-            if ($LASTEXITCODE -eq 0 -and $models -match "llama3.2") {
+            $models = Invoke-Native { ollama list }
+            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
                 Write-OK "llama3.2 already downloaded."
             } else {
                 Write-Info "Downloading llama3.2 (~2 GB)..."
                 Write-Host "  This may take a while depending on your internet speed."
-                ollama pull llama3.2
+                Invoke-Native { ollama pull llama3.2 } | Out-Null
                 Write-OK "llama3.2 ready."
             }
 
-            if ($LASTEXITCODE -eq 0 -and $models -match "nomic-embed-text") {
+            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "nomic-embed-text") {
                 Write-OK "nomic-embed-text already downloaded."
             } else {
                 Write-Info "Downloading nomic-embed-text (~274 MB)..."
-                ollama pull nomic-embed-text
+                Invoke-Native { ollama pull nomic-embed-text } | Out-Null
                 Write-OK "nomic-embed-text ready."
             }
         } else {
@@ -230,40 +248,65 @@ try {
             Write-Host "     The app will still start, but AI features won't work until Ollama is set up."
         }
 
-        $ComposeCmd = "docker compose up -d"
     }
 
-    # ── Step 5: Pull Docker images ─────────────────────────────────────────
+    # ── Step 5: Clean up any previous LuraStudy containers ────────────────
+    Write-Host ""
+    Write-Info "Cleaning up old containers..."
+    foreach ($name in @("lurastudy_db", "lurastudy_backend", "lurastudy_frontend")) {
+        Invoke-Native { docker rm -f $name 2>$null } | Out-Null
+    }
+
+    # ── Step 6: Pull Docker images ─────────────────────────────────────────
     Write-Host ""
     Write-Info "Pulling Docker images..."
-    $pullResult = docker compose pull 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "Pull failed. Make sure you have internet access."
-        exit 1
+    if ($useCloud) {
+        $pullResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml pull }
+    } else {
+        $pullResult = Invoke-Native { docker compose pull }
     }
-    Write-OK "Docker images pulled."
+    if ($global:LASTEXITCODE -ne 0) {
+        Write-Warn "Pull failed, but continuing anyway (images may already be cached)..."
+    } else {
+        Write-OK "Docker images pulled."
+    }
 
-    # ── Step 6: Start Docker Compose ───────────────────────────────────────
+    # ── Step 7: Start Docker Compose ───────────────────────────────────────
     Write-Host ""
     Write-Info "Starting LuraStudy..."
-    $upResult = Invoke-Expression $ComposeCmd 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        Write-Err "Failed to start LuraStudy."
-        Write-Host "  Run 'docker compose logs' to see what went wrong."
-        exit 1
+    if ($useCloud) {
+        $upResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d }
+    } else {
+        $upResult = Invoke-Native { docker compose up -d }
+    }
+    if ($global:LASTEXITCODE -ne 0) {
+        Write-Warn "'docker compose up -d' failed."
+        Write-Info "Trying with local build instead..."
+        if ($useCloud) {
+            $upResult = Invoke-Native { docker compose -f docker-compose.yml -f docker-compose.cloud.yml up --build -d }
+        } else {
+            $upResult = Invoke-Native { docker compose up --build -d }
+        }
+        if ($global:LASTEXITCODE -ne 0) {
+            Write-Err "Failed to start LuraStudy."
+            Write-Host "  Last error output: $($upResult -join ' ')"
+            Pop-Location
+            Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
+            exit 1
+        }
     }
 
-    # ── Step 7: Success ────────────────────────────────────────────────────
+    # ── Step 8: Success ────────────────────────────────────────────────────
     Write-Host ""
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "============================================" -ForegroundColor Green
     Write-Host "  LuraStudy is running!" -ForegroundColor Green
-    Write-Host "════════════════════════════════════════════════" -ForegroundColor Green
+    Write-Host "============================================" -ForegroundColor Green
     Write-Host ""
     Write-Host "  Frontend:  http://localhost:5173" -ForegroundColor White
     Write-Host "  Backend:   http://localhost:8000" -ForegroundColor White
     Write-Host "  API Docs:  http://localhost:8000/docs" -ForegroundColor White
     Write-Host ""
-    Write-Host "  👤 First time? Go to http://localhost:5173/register" -ForegroundColor Yellow
+    Write-Host "  First time? Go to http://localhost:5173/register" -ForegroundColor Yellow
     Write-Host "    to create your admin account."
     Write-Host ""
 
@@ -285,5 +328,7 @@ catch {
     Write-Host ""
     Write-Host "Press any key to close this window..."
     $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    Pop-Location
+    Remove-Item -Recurse -Force $TmpDir -ErrorAction SilentlyContinue
     exit 1
 }

@@ -130,6 +130,9 @@ main() {
     info "Downloading configuration files..."
     download_file "${REPO_BASE}/${COMPOSE_FILE}" "${COMPOSE_FILE}"
     download_file "${REPO_BASE}/${ENV_FILE}" "${ENV_FILE}"
+    # Also download the init.sql for PostgreSQL (referenced by compose file)
+    mkdir -p postgres
+    download_file "${REPO_BASE}/postgres/init.sql" "postgres/init.sql"
     success "Configuration files downloaded."
 
     # ── Step 3: Create .env ─────────────────────────────────────────────────
