@@ -48,11 +48,19 @@ function Invoke-Native {
 
 function Show-Banner {
     Clear-Host
-    Write-Host "  ___  _   _ ____   ____  _   _ _____    __  __" -ForegroundColor $Magenta
-    Write-Host " / _ \| | | |  _ \ / ___|| | | |_   _|  |  \/  |" -ForegroundColor $Magenta
-    Write-Host "| | | | | | | |_) |\___ \| | | | | |    | |\/| |" -ForegroundColor $Magenta
-    Write-Host "| |_| | |_| |  _ <  ___) | |_| | | |    | |  | |" -ForegroundColor $Magenta
-    Write-Host " \___/ \___/|_| \_\|____/ \___/  |_|    |_|  |_|" -ForegroundColor $Magenta
+    Write-Host @'
+ █████                                       █████████   █████                   █████
+░░███                                       ███░░░░░███ ░░███                   ░░███
+ ░███        █████ ████ ████████   ██████  ░███    ░░░  ███████   █████ ████  ███████  █████ ████
+ ░███       ░░███ ░███ ░░███░░███ ░░░░░███ ░░█████████ ░░░███░   ░░███ ░███  ███░░███ ░░███ ░███
+ ░███        ░███ ░███  ░███ ░░░   ███████  ░░░░░░░░███  ░███     ░███ ░███ ░███ ░███  ░███ ░███
+ ░███      █ ░███ ░███  ░███      ███░░███  ███    ░███  ░███ ███ ░███ ░███ ░███ ░███  ░███ ░███
+ ███████████ ░░████████ █████    ░░████████░░█████████   ░░█████  ░░████████░░████████ ░░███████
+░░░░░░░░░░░   ░░░░░░░░ ░░░░░      ░░░░░░░░  ░░░░░░░░░     ░░░░░    ░░░░░░░░  ░░░░░░░░   ░░░░░███
+                                                                                        ███ ░███
+                                                                                       ░░██████
+                                                                                        ░░░░░░
+'@ -ForegroundColor $Magenta
     Write-Host ""
     Write-Host "  Local-first AI study assistant" -ForegroundColor $White
     Write-Host "  One-command installer - v0.1.0" -ForegroundColor $DarkGray
