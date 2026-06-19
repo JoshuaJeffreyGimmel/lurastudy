@@ -16,6 +16,22 @@ title LuraStudy Setup
 REM ─── Banner ─────────────────────────────────────────────────────────────────
 cls
 echo.
+echo                .
+echo             .###*
+echo           .###*   .#.
+echo         .###*   .###*
+echo       .###*   .###*   .#.       l#                                                             .=:
+echo     .###*   .###*  .#####.      ll                                  s####S  =#=                -#+
+echo   .###*   .###*  .###* *###.    ll       ##  ##  :##+r##r  +####.  :#*    T######t ##  ##  d#####+ =#+  :#.
+echo *###:   *###:  .###*    :###*   ll       #U  #U   :R*  :#: .aaa#A   SS##.   t#t    #U  #U  D:  -D+  ##..#y
+echo   *###.   *######*    .###*     ll       #U  #U   :R*      :A  #A      *#:  t#:    #U  #U  d#. -D+  =#-Y#.
+echo     *###.   *##*    .###*       +######L u+++++= .+rr+-    A+++:#+ s####S   *+++t  u+++++= *+++-:-   -#Y:
+echo       *###.       .###*                                                                            -##Y:
+echo         *###.   .###*                                                                              *yy
+echo           *#######*
+echo             *###*
+echo               *
+echo.
 echo =============================================
 echo   LuraStudy -- Local-first AI study assistant
 echo   One-click setup -- v0.1.0
