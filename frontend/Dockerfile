@@ -18,6 +18,7 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Copy nginx config for SPA routing (catch-all to index.html)
 RUN echo 'server { \
     listen 5173; \
+    client_max_body_size 50M; \
     root /usr/share/nginx/html; \
     index index.html; \
     location / { \

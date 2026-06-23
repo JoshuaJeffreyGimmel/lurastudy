@@ -22,7 +22,7 @@ $Green = [System.ConsoleColor]::Green
 $Yellow = [System.ConsoleColor]::Yellow
 $Red = [System.ConsoleColor]::Red
 $White = [System.ConsoleColor]::White
-$Magenta = [System.ConsoleColor]::Magenta
+$Blue = [System.ConsoleColor]::Blue
 $DarkGray = [System.ConsoleColor]::DarkGray
 
 # ─── Helper functions ────────────────────────────────────────────────────────
@@ -66,7 +66,7 @@ function Show-Banner {
              *###*
                *
 
-'@ -ForegroundColor $Magenta
+'@ -ForegroundColor $Blue
     Write-Host ""
     Write-Host "  Local-first AI study assistant" -ForegroundColor $White
     Write-Host "  One-command installer - v0.1.0" -ForegroundColor $DarkGray
@@ -184,23 +184,39 @@ try {
     Write-Host ""
     Write-Info "Checking for Ollama..."
     if (Test-Command ollama) {
-        Write-OK "Ollama is installed."
-        Write-Info "Checking AI models (this may take a minute)..."
+        Write-OK "Ollama CLI is installed."
 
-        $models = Invoke-Native { ollama list }
-        if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
-            Write-OK "llama3.2 already downloaded."
+        # Check if the Ollama service process is actually running
+        $ollamaService = Get-Process -Name "ollama" -ErrorAction SilentlyContinue
+        $ollamaRunning = $null -ne $ollamaService
+
+        if (-not $ollamaRunning) {
+            Write-Warn "Ollama CLI is installed but the Ollama service is not running."
+            Write-Host "     To use local AI models, start the Ollama service first:"
+            Write-Host "       ollama serve"
+            Write-Host "     Then download models manually:"
+            Write-Host "       ollama pull llama3.2"
+            Write-Host "       ollama pull nomic-embed-text"
+            Write-Host "     Or use a cloud provider - configure it in Settings after logging in."
         } else {
-            Write-Info "Downloading llama3.2 (~2 GB)..."
-            Invoke-Native { ollama pull llama3.2 } | Out-Null
-            Write-OK "llama3.2 ready."
-        }
-        if ($global:LASTEXITCODE -eq 0 -and "$models" -match "nomic-embed-text") {
-            Write-OK "nomic-embed-text already downloaded."
-        } else {
-            Write-Info "Downloading nomic-embed-text (~274 MB)..."
-            Invoke-Native { ollama pull nomic-embed-text } | Out-Null
-            Write-OK "nomic-embed-text ready."
+            Write-OK "Ollama service is running."
+            Write-Info "Checking AI models (this may take a minute)..."
+
+            $models = Invoke-Native { ollama list }
+            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "llama3.2") {
+                Write-OK "llama3.2 already downloaded."
+            } else {
+                Write-Info "Downloading llama3.2 (~2 GB)..."
+                Invoke-Native { ollama pull llama3.2 } | Out-Null
+                Write-OK "llama3.2 ready."
+            }
+            if ($global:LASTEXITCODE -eq 0 -and "$models" -match "nomic-embed-text") {
+                Write-OK "nomic-embed-text already downloaded."
+            } else {
+                Write-Info "Downloading nomic-embed-text (~274 MB)..."
+                Invoke-Native { ollama pull nomic-embed-text } | Out-Null
+                Write-OK "nomic-embed-text ready."
+            }
         }
     } else {
         Write-Warn "Ollama not detected."
